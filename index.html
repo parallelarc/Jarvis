@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hand Tracking Demo with Three.js</title>
-    <script defer src="https://cloud.umami.is/script.js" data-website-id="eb59c81c-27cb-4e1d-9e8c-bfbe70c48cd9"></script>
     <style>
         body {
             margin: 0;
@@ -49,6 +48,7 @@
             left: 0;
             width: 100%;
             height: 100%;
+            transform: scaleX(-1); /* Mirror to match webcam */
             pointer-events: none;
             z-index: 5;
         }
@@ -64,20 +64,6 @@
             font-family: Arial, sans-serif;
             z-index: 10;
         }
-
-        #links-para{
-            position: absolute;
-            bottom: 5px;
-            left: 5px;
-            font-family: Helvetica, sans-serif;
-            font-size: 16px;
-            background-color: rgba(255, 255, 255, 0.5);
-            padding: 10px;
-        }
-
-        a {
-            color: #0000FF !important;
-        }
     </style>
 </head>
 <body>
@@ -88,13 +74,13 @@
         <div id="status">Loading MediaPipe...</div>
     </div>
 
-    <p id="links-para"><a href="https://x.com/measure_plan" target="_blank">Twitter</a> | <a href="https://www.instagram.com/stereo.drift/" target="_blank">Instagram</a> | <a href="https://github.com/collidingScopes/threejs-handtracking-101" target="_blank">Source Code</a> | <a href="https://buymeacoffee.com/stereodrift" target="_blank">❤️</a></p>
+    <script src="./models/libs/hands.js"></script>
+    <script src="./models/libs/drawing_utils.js"></script>
+    <script src="./models/libs/camera_utils.js"></script>
+    <script src="./models/libs/three.min.js"></script>
+    <script type="module">
+        import { initDebugPanel, updateDebugPanel } from './js/debugPanel.js';
 
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script>
         document.addEventListener('DOMContentLoaded', () => {
             const videoElement = document.getElementById('webcam');
             const canvasElement = document.getElementById('canvas');
@@ -104,16 +90,40 @@
             
             // Three.js variables
             let scene, camera, renderer;
-            let sphere, solidMesh, wireframeMesh;
-            
+
             // Hand tracking variables
             let rightHandActive = false;
             let leftHandActive = false;
             let lastColorChangeTime = 0;
             const colorChangeDelay = 500; // milliseconds
-            let currentSphereSize = 1.0; // Default/starting size
-            let targetSphereSize = 1.0;  // Target size based on hand gesture
-            const smoothingFactor = 0.15; // Adjust this value between 0-1 (lower = smoother but slower)
+
+            // Right hand drag state
+            let isTouching = false;      // 是否触摸球体
+            let isSelected = false;      // 是否已选中(捏合中)
+            let dragOffset = { x: 0, y: 0, z: 0 };  // 抓取点与球心的偏移
+            let spherePosition = { x: 0, y: 0, z: 0 };  // 球体当前位置
+            const handPinchThreshold = 0.08;  // 捏合判定阈值
+
+            // Particle system variables
+            let particleSystem;
+            const particleCount = 2000;
+            const particlePositions = new Float32Array(particleCount * 3);
+            const particleColors = new Float32Array(particleCount * 3);
+            const particleBasePositions = new Float32Array(particleCount * 3); // Store original positions
+            const particleVelocities = new Float32Array(particleCount * 3);
+            const particlePhases = new Float32Array(particleCount);
+
+            // Ripple effect variables
+            const ripples = [];
+            const rippleDuration = 2000; // milliseconds
+
+            // Spread control variables
+            let targetSpread = 1.0;
+            let currentSpread = 1.0;
+            const spreadSmoothing = 0.1;
+
+            // Base color for particles
+            let baseColor = { r: 1.0, g: 0.0, b: 1.0 }; // Magenta as default
 
             // Keep canvas size in sync with window size
             function updateCanvasSize() {
@@ -184,84 +194,200 @@
                 return neonColors[Math.floor(Math.random() * neonColors.length)];
             }
             
-            // Initialize Three.js
+            // Initialize Three.js with particle system
             function initThreeJS() {
                 // Create scene
                 scene = new THREE.Scene();
-                
+
                 // Create camera
                 camera = new THREE.PerspectiveCamera(
-                    75, 
-                    window.innerWidth / window.innerHeight, 
-                    0.1, 
+                    75,
+                    window.innerWidth / window.innerHeight,
+                    0.1,
                     1000
                 );
                 camera.position.z = 5;
-                
+
                 // Create renderer with transparent background
-                renderer = new THREE.WebGLRenderer({ 
-                    antialias: true, 
-                    alpha: true  // Enable transparency
+                renderer = new THREE.WebGLRenderer({
+                    antialias: true,
+                    alpha: true
                 });
                 renderer.setSize(window.innerWidth, window.innerHeight);
-                renderer.setClearColor(0x000000, 0); // Transparent background
+                renderer.setClearColor(0x000000, 0);
                 threeContainer.appendChild(renderer.domElement);
-                
-                // Create a sphere with vibrant neon color fill and white wireframe
-                const geometry = new THREE.SphereGeometry(2, 32, 32);
-                
-                // Create a group to hold both the solid and wireframe meshes
-                sphere = new THREE.Group();
-                
-                // Create solid mesh with neon color and slight transparency
-                const solidMaterial = new THREE.MeshBasicMaterial({ 
-                    color: 0xff00ff,  // Initial color
+
+                // Create particle geometry
+                const particleGeometry = new THREE.BufferGeometry();
+
+                // Generate particles on sphere surface
+                const baseRadius = 2.0;
+
+                for (let i = 0; i < particleCount; i++) {
+                    // Use spherical coordinates for uniform distribution
+                    const theta = Math.random() * Math.PI * 2;
+                    const phi = Math.acos(2 * Math.random() - 1);
+
+                    // Store base position
+                    const x = baseRadius * Math.sin(phi) * Math.cos(theta);
+                    const y = baseRadius * Math.sin(phi) * Math.sin(theta);
+                    const z = baseRadius * Math.cos(phi);
+
+                    particleBasePositions[i * 3] = x;
+                    particleBasePositions[i * 3 + 1] = y;
+                    particleBasePositions[i * 3 + 2] = z;
+
+                    particlePositions[i * 3] = x;
+                    particlePositions[i * 3 + 1] = y;
+                    particlePositions[i * 3 + 2] = z;
+
+                    // Initialize color (magenta)
+                    particleColors[i * 3] = 1.0;
+                    particleColors[i * 3 + 1] = 0.0;
+                    particleColors[i * 3 + 2] = 1.0;
+
+                    // Initialize velocity (random rotation direction)
+                    particleVelocities[i * 3] = (Math.random() - 0.5) * 0.02;
+                    particleVelocities[i * 3 + 1] = (Math.random() - 0.5) * 0.02;
+                    particleVelocities[i * 3 + 2] = (Math.random() - 0.5) * 0.02;
+
+                    // Random phase for pulsing effect
+                    particlePhases[i] = Math.random() * Math.PI * 2;
+                }
+
+                particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+                particleGeometry.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
+
+                // Create particle material with vertex colors
+                const particleMaterial = new THREE.PointsMaterial({
+                    size: 0.05,
+                    vertexColors: true,
                     transparent: true,
-                    opacity: 0.5
+                    opacity: 0.8,
+                    blending: THREE.AdditiveBlending,
+                    sizeAttenuation: true
                 });
-                solidMesh = new THREE.Mesh(geometry, solidMaterial);
-                sphere.add(solidMesh);
-                
-                // Create wireframe mesh with white color
-                const wireframeMaterial = new THREE.MeshBasicMaterial({
-                    color: 0xffffff,
-                    wireframe: true,
-                    transparent: false,
-                });
-                wireframeMesh = new THREE.Mesh(geometry, wireframeMaterial);
-                sphere.add(wireframeMesh);
-                scene.add(sphere);
-                
-                // Add some ambient light
+
+                // Create particle system
+                particleSystem = new THREE.Points(particleGeometry, particleMaterial);
+                scene.add(particleSystem);
+
+                // Add ambient light (for potential future enhancements)
                 const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
                 scene.add(ambientLight);
-                
+
                 // Start animation loop
                 animate();
             }
             
-            // Animation loop for Three.js
+            // Animation loop for Three.js with particle animation
             function animate() {
                 requestAnimationFrame(animate);
-                
-                // Rotate the sphere continuously, regardless of hand interaction
-                if (sphere) {
-                    // Remove the condition that stops rotation during hand interaction
-                    sphere.rotation.x += 0.003;
-                    sphere.rotation.y += 0.008;
-                    
-                    // Add pulsing glow effect to the neon fill
-                    const time = Date.now() * 0.001; // Convert to seconds
-                    const pulseIntensity = 0.1 * Math.sin(time * 2) + 0.9; // Oscillate between 0.8 and 1.0
-                    
-                    // Apply pulse to opacity
-                    if (solidMesh && solidMesh.material) {
-                        solidMesh.material.opacity = 0.4 + 0.1 * pulseIntensity;
+
+                if (particleSystem) {
+                    const time = Date.now() * 0.001;
+
+                    // Pre-compute rotation values (same for all particles)
+                    const rotationAngle = 0.01 + time * 0.1;
+                    const cosAngle = Math.cos(rotationAngle);
+                    const sinAngle = Math.sin(rotationAngle);
+
+                    // Apply spread to base positions and animate particles
+                    for (let i = 0; i < particleCount; i++) {
+                        const i3 = i * 3;
+
+                        // Get base position with spread (sphere center NOT included yet)
+                        const baseX = particleBasePositions[i3] * currentSpread;
+                        const baseY = particleBasePositions[i3 + 1] * currentSpread;
+                        const baseZ = particleBasePositions[i3 + 2] * currentSpread;
+
+                        // FIRST: Rotate around Y axis (around particle sphere's own center)
+                        const rotatedX = baseX * cosAngle - baseZ * sinAngle;
+                        const rotatedZ = baseX * sinAngle + baseZ * cosAngle;
+                        const rotatedY = baseY;
+
+                        // SECOND: Add pulsing effect
+                        const pulse = 1 + 0.05 * Math.sin(time * 2 + particlePhases[i]);
+
+                        // THIRD: Add sphere position translation (last step!)
+                        particlePositions[i3] = rotatedX * pulse + spherePosition.x;
+                        particlePositions[i3 + 1] = rotatedY * pulse + spherePosition.y;
+                        particlePositions[i3 + 2] = rotatedZ * pulse + spherePosition.z;
                     }
+
+                    // Update particle positions
+                    particleSystem.geometry.attributes.position.needsUpdate = true;
+
+                    // Update colors with ripple effect
+                    updateColorsWithRipple(time);
+
+                    // Update particle colors
+                    particleSystem.geometry.attributes.color.needsUpdate = true;
                 }
-                
+
                 // Render the scene
                 renderer.render(scene, camera);
+            }
+
+            // Update particle colors with ripple effect
+            function updateColorsWithRipple(time) {
+                const currentTime = Date.now();
+
+                // Update each particle's color
+                for (let i = 0; i < particleCount; i++) {
+                    const i3 = i * 3;
+                    const particlePos = {
+                        x: particlePositions[i3],
+                        y: particlePositions[i3 + 1],
+                        z: particlePositions[i3 + 2]
+                    };
+
+                    let finalColor = { ...baseColor };
+
+                    // Calculate all active ripples' influence on this particle
+                    for (let r = 0; r < ripples.length; r++) {
+                        const ripple = ripples[r];
+                        const age = currentTime - ripple.startTime;
+
+                        if (age < rippleDuration) {
+                            const distance = calculateDistance(particlePos, ripple.contactPoint);
+                            const rippleRadius = age * 0.005; // Ripple expansion speed
+                            const rippleWidth = 0.5;
+
+                            // If particle is within the ripple wave front
+                            if (Math.abs(distance - rippleRadius) < rippleWidth) {
+                                const intensity = (1 - age / rippleDuration) * (1 - Math.abs(distance - rippleRadius) / rippleWidth);
+                                finalColor = blendColors(finalColor, ripple.color, intensity * 0.8);
+                            }
+                        }
+                    }
+
+                    particleColors[i3] = finalColor.r;
+                    particleColors[i3 + 1] = finalColor.g;
+                    particleColors[i3 + 2] = finalColor.b;
+                }
+
+                // Clean up old ripples
+                while (ripples.length > 0 && currentTime - ripples[0].startTime > rippleDuration) {
+                    ripples.shift();
+                }
+            }
+
+            // Helper function to blend two colors
+            function blendColors(color1, color2, ratio) {
+                return {
+                    r: color1.r * (1 - ratio) + color2.r * ratio,
+                    g: color1.g * (1 - ratio) + color2.g * ratio,
+                    b: color1.b * (1 - ratio) + color2.b * ratio
+                };
+            }
+
+            // Convert hex color to RGB object
+            function hexToRgb(hex) {
+                const r = ((hex >> 16) & 255) / 255;
+                const g = ((hex >> 8) & 255) / 255;
+                const b = (hex & 255) / 255;
+                return { r, g, b };
             }
             
             // Calculate distance between two 3D points
@@ -272,36 +398,81 @@
                 return Math.sqrt(dx * dx + dy * dy + dz * dz);
             }
             
-            // Detect if a point is inside/near the sphere
-            function isPointInSphere(point) {
+            // Detect if a point is near any particle (for particle system)
+            function isPointNearParticles(point) {
                 // Convert normalized coordinates to world space
                 const worldX = (point.x - 0.5) * 10;
-                const worldY = (0.5 - point.y) * 10; // Invert Y to match Three.js coordinate system
-                const worldZ = 0; // Assume point is on Z=0 plane
-                
-                // Get sphere position in world space
-                const spherePos = new THREE.Vector3();
-                sphere.getWorldPosition(spherePos);
-                
-                // Calculate distance between point and sphere center
-                const distance = Math.sqrt(
-                    Math.pow(worldX - spherePos.x, 2) + 
-                    Math.pow(worldY - spherePos.y, 2) + 
-                    Math.pow(worldZ - spherePos.z, 2)
-                );
-                
-                // Consider interaction if point is within or near the sphere surface
-                // Using the current sphere size for detection
-                const currentSize = sphere.scale.x * 2;
-                return distance < currentSize * 1; // Add some buffer for easier interaction
+                const worldY = (0.5 - point.y) * 10;
+                const worldZ = 0;
+
+                // Check distance to center with current spread
+                const centerDistance = Math.sqrt(worldX * worldX + worldY * worldY + worldZ * worldZ);
+                const threshold = 2.0 * currentSpread;
+
+                return centerDistance < threshold;
+            }
+
+            // Check if a point is near the particle sphere (considering sphere position)
+            function isPointNearParticlesWithPos(point, spherePos, spread) {
+                const worldX = (point.x - 0.5) * 10;
+                const worldY = (0.5 - point.y) * 10;
+                const dx = worldX - spherePos.x;
+                const dy = worldY - spherePos.y;
+                const dz = -spherePos.z;
+                const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                return distance < 2.0 * spread;
+            }
+
+            // Convert normalized coordinates to world coordinates
+            function normalizedToWorld(point) {
+                return {
+                    x: (point.x - 0.5) * 10,
+                    y: (0.5 - point.y) * 10,
+                    z: 0
+                };
+            }
+
+            // Get contact point on particle system
+            function getContactPoint(point) {
+                // Convert normalized coordinates to world space
+                const worldX = (point.x - 0.5) * 10;
+                const worldY = (0.5 - point.y) * 10;
+                const worldZ = 0;
+
+                // Normalize to get direction, scale to current spread
+                const magnitude = Math.sqrt(worldX * worldX + worldY * worldY);
+                if (magnitude > 0) {
+                    const scale = 2.0 * currentSpread * 0.7;
+                    return {
+                        x: (worldX / magnitude) * scale,
+                        y: (worldY / magnitude) * scale,
+                        z: 0
+                    };
+                }
+
+                return { x: 0, y: 0, z: 0 };
             }
             
             // Initialize MediaPipe Hands
             async function initMediaPipeHands() {
                 statusElement.textContent = 'Initializing MediaPipe Hands...';
-                
+
                 const hands = new Hands({
                     locateFile: (file) => {
+                        // Use local files for existing models, CDN for others
+                        const localFiles = [
+                            'hands_solution_packed_assets.data',
+                            'hands_solution_packed_assets.fileset',
+                            'hands_solution_packed_assets_loader.js',
+                            'hands_solution_simd_wasm_bin.js',
+                            'hands_solution_simd_wasm_bin.wasm',
+                            'hands_solution_similarity_calculator.data',
+                            'hands.binarypb',
+                            'hand_landmark_full.tflite'
+                        ];
+                        if (localFiles.includes(file)) {
+                            return `./models/hands/${file}`;
+                        }
                         return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
                     }
                 });
@@ -320,12 +491,12 @@
             }
             
             // Draw hand landmarks on canvas with dynamic sizing
-            function drawLandmarks(landmarks, isLeft) {
+            function drawLandmarks(landmarks, isLeft, isTouching = false, isSelected = false) {
                 // Adjust line width and point size based on screen dimension
                 const screenSize = Math.min(window.innerWidth, window.innerHeight);
                 const lineWidth = Math.max(2, Math.min(5, screenSize / 300));
                 const pointSize = Math.max(2, Math.min(8, screenSize / 250));
-                
+
                 // Define connections between landmarks
                 const connections = [
                     // Thumb
@@ -341,9 +512,18 @@
                     // Palm
                     [0, 5], [5, 9], [9, 13], [13, 17]
                 ];
-                
-                // Choose a different color for each hand
-                const handColor = isLeft ? '#00FF00' : '#00FFFF';
+
+                // Choose color based on state for right hand
+                let handColor;
+                if (isSelected) {
+                    handColor = '#FFFFFF';  // White when selected
+                } else if (isTouching) {
+                    handColor = '#FFFF00';  // Yellow when touching
+                } else if (isLeft) {
+                    handColor = '#00FF00';  // Green for left hand
+                } else {
+                    handColor = '#00FFFF';  // Cyan for right hand (default)
+                }
                 
                 // Draw connections
                 canvasCtx.lineWidth = lineWidth;
@@ -394,6 +574,7 @@
                 // Reset the tracking flags for this frame
                 rightHandActive = false;
                 leftHandActive = false;
+                let pinchDistance = 0;  // Track pinch distance for debug panel
                 
                 // Process hand landmarks if detected
                 if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -407,67 +588,81 @@
                         const landmarks = results.multiHandLandmarks[handIndex];
                         const handedness = results.multiHandedness[handIndex].label;
                         const isLeftHand = handedness === 'Left';
-                        
-                        // Draw the hand landmarks with appropriate color
-                        drawLandmarks(landmarks, isLeftHand);
-                        
+
                         if (!isLeftHand) {
-                            // RIGHT HAND: Control sphere size with thumb-index distance
-                            // Get thumb tip and index finger tip positions
+                            // RIGHT HAND: Touch-pinch-drag interaction
                             const thumbTip = landmarks[4];
                             const indexTip = landmarks[8];
-                            
-                            // Calculate the distance between thumb and index finger
-                            const pinchDistance = calculateDistance(thumbTip, indexTip);
-                            
-                            // Map the pinch distance to a sphere size (adjusted for better UX)
-                            // Smaller distance = smaller sphere, larger distance = larger sphere
-                            
-                            // Calibrate distance range based on reasonable hand movement
-                            // Normal pinch is around 0.05-0.1, open hand is 0.2-0.3
-                            if (pinchDistance < 0.05) {
-                                targetSphereSize = 0.2; // Minimum size when pinched
-                            } else if (pinchDistance > 0.25) {
-                                targetSphereSize = 2.0; // Maximum size when fully open
-                            } else {
-                                // Linear mapping from pinch distance to sphere size
-                                targetSphereSize = 0.2 + (pinchDistance - 0.05) * (2.0 - 0.2) / (0.25 - 0.05);
-                            }
-                            
-                            // Apply smooth interpolation toward the target size
-                            currentSphereSize = currentSphereSize + (targetSphereSize - currentSphereSize) * smoothingFactor;
-                            
-                            // Apply the smoothed size to the sphere
-                            if (sphere) {
-                                sphere.scale.set(currentSphereSize, currentSphereSize, currentSphereSize);
-                            }
-                            
-                            rightHandActive = true;
-                        } else {
-                            // LEFT HAND: Change color when index finger touches sphere
-                            // Get index finger tip position (landmark 8)
-                            const indexTip = landmarks[8];
-                            
-                            // Check if index finger is touching the sphere
-                            if (isPointInSphere(indexTip)) {
-                                // Change color with a cooldown to prevent rapid changes
-                                const currentTime = Date.now();
-                                if (currentTime - lastColorChangeTime > colorChangeDelay) {
-                                    // Change to a random neon color
-                                    const newColor = getRandomNeonColor();
-                                    if (solidMesh && solidMesh.material) {
-                                        solidMesh.material.color.setHex(newColor);
-                                    }
-                                    lastColorChangeTime = currentTime;
+
+                            // 1. Check if BOTH thumb and index are touching the sphere
+                            const thumbNear = isPointNearParticlesWithPos(thumbTip, spherePosition, currentSpread);
+                            const indexNear = isPointNearParticlesWithPos(indexTip, spherePosition, currentSpread);
+                            const bothTouching = thumbNear && indexNear;
+
+                            // 2. Calculate pinch distance
+                            pinchDistance = calculateDistance(thumbTip, indexTip);
+
+                            // 3. State machine
+                            // 一旦选中，需要松开捏合才能取消选中（而不是暂时偏离触摸区）
+                            if (isSelected) {
+                                if (pinchDistance < handPinchThreshold) {
+                                    // Selected and still pinching → drag mode
+                                    const handWorldPos = normalizedToWorld(indexTip);
+                                    spherePosition.x = handWorldPos.x - dragOffset.x;
+                                    spherePosition.y = handWorldPos.y - dragOffset.y;
+                                    spherePosition.z = handWorldPos.z - dragOffset.z;
+
+                                    // Apply screen boundary constraints
+                                    const aspectRatio = window.innerWidth / window.innerHeight;
+                                    const boundaryY = 4.5;
+                                    const boundaryX = boundaryY * aspectRatio;
+
+                                    spherePosition.x = Math.max(-boundaryX, Math.min(boundaryX, spherePosition.x));
+                                    spherePosition.y = Math.max(-boundaryY, Math.min(boundaryY, spherePosition.y));
+                                    spherePosition.z = Math.max(-2, Math.min(2, spherePosition.z));
+                                } else {
+                                    // 松开捏合 → 取消选中
+                                    isSelected = false;
                                 }
-                                
-                                leftHandActive = true;
+                            } else if (bothTouching && pinchDistance < handPinchThreshold) {
+                                // Both touching + pinching → select the object
+                                isSelected = true;
+                                const handWorldPos = normalizedToWorld(indexTip);
+                                dragOffset = {
+                                    x: handWorldPos.x - spherePosition.x,
+                                    y: handWorldPos.y - spherePosition.y,
+                                    z: handWorldPos.z - spherePosition.z
+                                };
                             }
+
+                            // Touch state for visual feedback
+                            isTouching = bothTouching;
+                            rightHandActive = true;
+
+                            // Draw the hand landmarks AFTER computing state
+                            drawLandmarks(landmarks, isLeftHand, isTouching, isSelected);
+                        } else {
+                            // LEFT HAND: Only draw, no interaction
+                            leftHandActive = true;
+                            drawLandmarks(landmarks, isLeftHand, false, false);
                         }
                     }
                 } else {
                     statusElement.textContent = 'No hands detected';
                 }
+
+                // Update debug panel with current state
+                updateDebugPanel({
+                    leftHand: leftHandActive,
+                    rightHand: rightHandActive,
+                    pinchDistance: pinchDistance,
+                    isTouching: isTouching,
+                    isSelected: isSelected,
+                    spherePosition: { ...spherePosition },
+                    spread: currentSpread,
+                    baseColor: { ...baseColor },
+                    ripplesCount: ripples.length
+                });
             }
             
             // Initialize and start the app
@@ -475,6 +670,7 @@
                 try {
                     await initWebcam();
                     initThreeJS(); // Initialize Three.js
+                    initDebugPanel(); // Initialize debug panel
                     const hands = await initMediaPipeHands();
                     
                     hands.onResults(onResults);

@@ -1,0 +1,53 @@
+# System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# Claude Code
+.claude/
+
+# Playwright MCP
+.playwright-mcp/
+
+# Node modules (if added later)
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build outputs
+dist/
+build/
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.cache
+
+# Notes and drafts (optional - remove if you want to track these)
+prompt.md
+*.md~
+
+# Large demo assets (optional - remove if you want to track these)
+# demo.png
+# vbot.jpg
+
+# Off-axis-sneaker (different project?)
+off-axis-sneaker/
+models
