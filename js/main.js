@@ -158,6 +158,7 @@ function onResults(results) {
         isZoomMode: state.isZoomMode,
         leftHandTouching: state.leftHandTouching,
         leftHandPinching: state.leftHandPinching,
+        leftPinchDistance: state.leftHandPinchDistance,
         bothTouching: zoomState.bothTouching,
         bothPinching: zoomState.bothPinching,
         zoomDistance: state.zoomCurrentDistance,

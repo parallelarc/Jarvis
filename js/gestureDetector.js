@@ -155,7 +155,7 @@ export function isThumbExtended(landmarks) {
     const wristToIndex = calculateDistance(wrist, indexMCP);
 
     // 拇指伸直时，距离应该更大
-    return thumbToIndex > wristToIndex * 0.7;
+    return thumbToIndex > wristToIndex * 0.6;
 }
 
 /**
@@ -430,9 +430,10 @@ export function getPalmCenter(landmarks) {
 /**
  * 获取手掌法向量 (用于判断朝向)
  * @param {Array} landmarks - 21个关键点
+ * @param {string} handedness - 'Left' 或 'Right' (默认 Right)
  * @returns {Object} 法向量 {x, y, z}
  */
-export function getPalmNormal(landmarks) {
+export function getPalmNormal(landmarks, handedness = 'Right') {
     // 使用手腕、中指根部、小指根部三个点计算平面法向量
     const p0 = landmarks[0];  // 手腕
     const p1 = landmarks[9];  // 中指根部
@@ -443,20 +444,30 @@ export function getPalmNormal(landmarks) {
     const v2 = { x: p2.x - p0.x, y: p2.y - p0.y, z: p2.z - p0.z };
 
     // 叉积得到法向量
-    return {
+    const normal = {
         x: v1.y * v2.z - v1.z * v2.y,
         y: v1.z * v2.x - v1.x * v2.z,
         z: v1.x * v2.y - v1.y * v2.x
     };
+
+    // 针对左手进行坐标修正
+    if (handedness === 'Left') {
+        normal.x = -normal.x; // 修正左右
+        normal.y = -normal.y; // 保持原本的上下翻转（如果有）
+        // normal.z = -normal.z; // 修正：不翻转Z轴，解决 Away/Camera 相反的问题
+    }
+
+    return normal;
 }
 
 /**
  * 检测手掌是否朝上
  * @param {Array} landmarks - 21个关键点
+ * @param {string} handedness - 'Left' 或 'Right'
  * @returns {boolean} 是否朝上
  */
-export function isPalmFacingUp(landmarks) {
-    const normal = getPalmNormal(landmarks);
+export function isPalmFacingUp(landmarks, handedness = 'Right') {
+    const normal = getPalmNormal(landmarks, handedness);
     const absX = Math.abs(normal.x);
     const absY = Math.abs(normal.y);
     const absZ = Math.abs(normal.z);
@@ -467,10 +478,11 @@ export function isPalmFacingUp(landmarks) {
 /**
  * 检测手掌是否朝下
  * @param {Array} landmarks - 21个关键点
+ * @param {string} handedness - 'Left' 或 'Right'
  * @returns {boolean} 是否朝下
  */
-export function isPalmFacingDown(landmarks) {
-    const normal = getPalmNormal(landmarks);
+export function isPalmFacingDown(landmarks, handedness = 'Right') {
+    const normal = getPalmNormal(landmarks, handedness);
     const absX = Math.abs(normal.x);
     const absY = Math.abs(normal.y);
     const absZ = Math.abs(normal.z);
@@ -481,21 +493,25 @@ export function isPalmFacingDown(landmarks) {
 /**
  * 检测手掌是否朝向摄像头
  * @param {Array} landmarks - 21个关键点
+ * @param {string} handedness - 'Left' 或 'Right'
  * @returns {boolean} 是否朝向摄像头
  */
-export function isPalmFacingCamera(landmarks) {
-    const normal = getPalmNormal(landmarks);
+export function isPalmFacingCamera(landmarks, handedness = 'Right') {
+    const normal = getPalmNormal(landmarks, handedness);
     // Z轴主导表示朝向摄像头（仅判断主导轴，忽略正负）
+    // 通常Z>0表示朝向摄像头(因为摄像机在+Z方向看原点?)
+    // 原始代码只判断了轴主导，未判断方向。这里保持原逻辑。
     return Math.abs(normal.z) > Math.abs(normal.x) && Math.abs(normal.z) > Math.abs(normal.y);
 }
 
 /**
  * 获取手掌方向描述
  * @param {Array} landmarks - 21个关键点
+ * @param {string} handedness - 'Left' 或 'Right'
  * @returns {string} 方向描述 'up', 'down', 'left', 'right', 'camera', 'away'
  */
-export function getPalmDirection(landmarks) {
-    const normal = getPalmNormal(landmarks);
+export function getPalmDirection(landmarks, handedness = 'Right') {
+    const normal = getPalmNormal(landmarks, handedness);
 
     const absX = Math.abs(normal.x);
     const absY = Math.abs(normal.y);
@@ -811,10 +827,11 @@ export function detectHandGestures(landmarks, handedness = 'Right') {
         // 手掌方向
         palm: {
             center: palmCenter,
-            direction: getPalmDirection(landmarks),
-            facingUp: isPalmFacingUp(landmarks),
-            facingDown: isPalmFacingDown(landmarks),
-            facingCamera: isPalmFacingCamera(landmarks)
+            normal: getPalmNormal(landmarks, handedness), // Add normal for debug
+            direction: getPalmDirection(landmarks, handedness),
+            facingUp: isPalmFacingUp(landmarks, handedness),
+            facingDown: isPalmFacingDown(landmarks, handedness),
+            facingCamera: isPalmFacingCamera(landmarks, handedness)
         },
 
         // 动态手势

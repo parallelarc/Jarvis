@@ -2,10 +2,18 @@
  * Debug Panel Styles
  */
 
-.debug-panel {
+.debug-panels {
     position: fixed;
-    top: 20px;
-    left: 20px;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 0;
+    overflow: visible;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+.debug-panel {
     width: 280px;
     background-color: rgba(0, 0, 0, 0.85);
     border: 1px solid rgba(255, 255, 255, 0.2);
@@ -13,9 +21,23 @@
     font-family: 'Courier New', monospace;
     font-size: 12px;
     color: #fff;
-    z-index: 1000;
     backdrop-filter: blur(4px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.debug-panel.left {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+}
+
+.debug-panel.right {
+    position: fixed;
+    top: 20px;
+    right: 20px;
 }
 
 .debug-header {
@@ -166,15 +188,24 @@
 }
 
 /* Responsive adjustments */
-@media (max-width: 600px) {
-    .debug-panel {
-        width: 220px;
-        font-size: 11px;
+@media (max-width: 700px) {
+    .debug-panels {
         top: 10px;
         left: 10px;
+        right: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .debug-panel {
+        position: static;
+        width: 100%;
+        font-size: 11px;
     }
 
     .debug-content {
         padding: 8px 10px;
+        max-height: 35vh;
     }
 }
