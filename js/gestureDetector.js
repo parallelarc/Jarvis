@@ -37,7 +37,7 @@ const CONFIG = {
 
     // Hello waving打招呼检测参数（保持原有）
     WAVE_X_THRESHOLD: 0.01,        // X轴移动阈值（更灵敏）
-    WAVE_MIN_DIRECTION_CHANGES: 1, // 最小方向改变次数（更灵敏）
+    WAVE_MIN_DIRECTION_CHANGES: 2, // 最小方向改变次数（更灵敏）
     WAVE_RAISE_Y_THRESHOLD: 0.7,   // 手举起Y阈值（更宽松）
     WAVE_TRIGGER_DURATION: 800     // 触发所需的持续时间(ms)
 };
@@ -436,8 +436,9 @@ export function getPalmCenter(landmarks) {
 export function getPalmNormal(landmarks, handedness = 'Right') {
     // 使用手腕、中指根部、小指根部三个点计算平面法向量
     const p0 = landmarks[0];  // 手腕
-    const p1 = landmarks[9];  // 中指根部
-    const p2 = landmarks[17]; // 小指根部
+    // 左手交换 p1 和 p2，使法向量方向正确
+    const p1 = handedness === 'Left' ? landmarks[17] : landmarks[9];  // 小指/中指根部
+    const p2 = handedness === 'Left' ? landmarks[9] : landmarks[17];  // 中指/小指根部
 
     // 计算两个向量
     const v1 = { x: p1.x - p0.x, y: p1.y - p0.y, z: p1.z - p0.z };
@@ -449,13 +450,6 @@ export function getPalmNormal(landmarks, handedness = 'Right') {
         y: v1.z * v2.x - v1.x * v2.z,
         z: v1.x * v2.y - v1.y * v2.x
     };
-
-    // 针对左手进行坐标修正
-    if (handedness === 'Left') {
-        normal.x = -normal.x; // 修正左右
-        normal.y = -normal.y; // 保持原本的上下翻转（如果有）
-        // normal.z = -normal.z; // 修正：不翻转Z轴，解决 Away/Camera 相反的问题
-    }
 
     return normal;
 }
@@ -566,9 +560,9 @@ function updateGestureHistory(handKey, position) {
  * @param {string} handKey - 'leftHand' 或 'rightHand'
  * @returns {boolean} 是否在挥手
  */
-export function isWaving(landmarks, handKey = 'rightHand') {
-    // Only count waving when the palm is open, facing the camera, and not OK.
-    if (!isOpenPalm(landmarks) || !isPalmFacingCamera(landmarks) || isOKGesture(landmarks)) {
+export function isWaving(landmarks, handKey = 'rightHand', palmDirection = '') {
+    // Only count waving when the palm is open, facing the camera (not away), and not OK.
+    if (!isOpenPalm(landmarks) || palmDirection === 'away' || isOKGesture(landmarks)) {
         return false;
     }
 
@@ -682,19 +676,26 @@ function updateHelloWaveState(handKey, palmCenter, isHandRaised) {
 }
 
 /**
- * 检测Hello打招呼挥手手势（举手并挥动，持续2秒）
+ * 检测Hello打招呼挥手手势（挥手，持续2秒）
  * @param {Array} landmarks - 21个关键点
  * @param {string} handKey - 'leftHand' 或 'rightHand'
+ * @param {Object} gestureStates - 手势状态 {pointing, thumbsUp, ok, fist}
+ * @param {string} palmDirection - 掌心方向
  * @returns {Object} {isWaving: boolean, duration: number}
  */
-export function isHelloWaving(landmarks, handKey = 'rightHand') {
+export function isHelloWaving(landmarks, handKey = 'rightHand', gestureStates = {}, palmDirection = '') {
     const palmCenter = getPalmCenter(landmarks);
 
-    // 1. 检测手是否举起 (Y坐标小于阈值，手掌张开)
-    const isHandRaised = palmCenter.y < CONFIG.WAVE_RAISE_Y_THRESHOLD && isOpenPalm(landmarks);
+    // 限制条件：特定手势或方向不能触发
+    const blockedByGesture = gestureStates.pointing || gestureStates.thumbsUp ||
+                           gestureStates.ok || gestureStates.fist;
+    const blockedByDirection = palmDirection === 'away';
+
+    // 1. 检测手掌张开（不再检测Y坐标）
+    const canWave = isOpenPalm(landmarks) && !blockedByGesture && !blockedByDirection;
 
     // 2. 更新挥手状态
-    updateHelloWaveState(handKey, palmCenter, isHandRaised);
+    updateHelloWaveState(handKey, palmCenter, canWave);
 
     const waveState = gestureHistory[handKey];
 
@@ -783,8 +784,17 @@ export function detectHandGestures(landmarks, handedness = 'Right') {
     const palmCenter = getPalmCenter(landmarks);
     const handKey = handedness === 'Left' ? 'leftHand' : 'rightHand';
 
-    // 检测Hello打招呼挥手
-    const helloWaving = isHelloWaving(landmarks, handKey);
+    // 先计算手势状态和掌心方向（用于isHelloWaving的限制条件）
+    const gestureStates = {
+        pointing: isPointingGesture(landmarks),
+        thumbsUp: isThumbsUpGesture(landmarks),
+        ok: isOKGesture(landmarks),
+        fist: isFist(landmarks)
+    };
+    const palmDirection = getPalmDirection(landmarks, handedness);
+
+    // 检测Hello打招呼挥手（传入手势状态和掌心方向）
+    const helloWaving = isHelloWaving(landmarks, handKey, gestureStates, palmDirection);
 
     return {
         // 基础手指状态
@@ -813,22 +823,22 @@ export function detectHandGestures(landmarks, handedness = 'Right') {
 
         // 常见手势
         gestures: {
-            pointing: isPointingGesture(landmarks),
+            pointing: gestureStates.pointing,
             victory: isVictoryGesture(landmarks),
-            thumbsUp: isThumbsUpGesture(landmarks),
+            thumbsUp: gestureStates.thumbsUp,
             thumbsDown: isThumbsDownGesture(landmarks),
-            ok: isOKGesture(landmarks),
+            ok: gestureStates.ok,
             callMe: isCallMeGesture(landmarks),
             rockOn: isRockOnGesture(landmarks),
             openPalm: isOpenPalm(landmarks),
-            fist: isFist(landmarks)
+            fist: gestureStates.fist
         },
 
         // 手掌方向
         palm: {
             center: palmCenter,
             normal: getPalmNormal(landmarks, handedness), // Add normal for debug
-            direction: getPalmDirection(landmarks, handedness),
+            direction: palmDirection,
             facingUp: isPalmFacingUp(landmarks, handedness),
             facingDown: isPalmFacingDown(landmarks, handedness),
             facingCamera: isPalmFacingCamera(landmarks, handedness)
@@ -836,7 +846,7 @@ export function detectHandGestures(landmarks, handedness = 'Right') {
 
         // 动态手势
         dynamic: {
-            waving: isWaving(landmarks, handKey),
+            waving: isWaving(landmarks, handKey, palmDirection),
             helloWaving: helloWaving
         }
     };
