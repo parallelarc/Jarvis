@@ -172,6 +172,27 @@ export function updateDebugPanel(data) {
         setText('debug-ripples', data.ripplesCount.toString());
     }
 
+    // Update Hello wave state
+    if (data.helloWavingActive !== undefined) {
+        const el = elements['debug-hello-waving'];
+        if (el) {
+            el.textContent = data.helloWavingActive ? '👋 Waving' : 'No';
+            el.style.color = data.helloWavingActive ? '#00ffff' : '#888';
+        }
+    }
+
+    // Update animation state
+    if (data.animationState !== undefined) {
+        const stateNames = {
+            'ball': '🔮 Ball',
+            'exploding': '💥 Exploding',
+            'forming': '✨ Forming',
+            'text': '📝 Hello',
+            'recovering': '🔄 Recovering'
+        };
+        setText('debug-anim-state', stateNames[data.animationState] || data.animationState);
+    }
+
     // Update gesture states if provided
     if (data.gestures) {
         updateGestureStates(data.gestures);
@@ -212,6 +233,12 @@ function updateGestureStates(gestures) {
         setGestureState('debug-gesture-ok', gestureStates.ok);
         setGestureState('debug-gesture-openpalm', gestureStates.openPalm);
         setGestureState('debug-gesture-fist', gestureStates.fist);
+    }
+
+    // Update dynamic gesture states
+    const dynamic = handGestures.dynamic;
+    if (dynamic) {
+        setGestureState('debug-gesture-wave', dynamic.waving);
     }
 
     // Update palm direction
@@ -279,7 +306,8 @@ function clearGestureDisplays() {
     setText('debug-finger-count', '0');
 
     const gestureIds = ['debug-gesture-point', 'debug-gesture-victory', 'debug-gesture-thumbsup',
-                        'debug-gesture-ok', 'debug-gesture-openpalm', 'debug-gesture-fist'];
+                        'debug-gesture-ok', 'debug-gesture-openpalm', 'debug-gesture-fist',
+                        'debug-gesture-wave'];
     gestureIds.forEach(id => {
         const el = elements[id];
         if (el) {
@@ -459,6 +487,10 @@ function createPanelDOM() {
                     <span class="debug-label">Fist:</span>
                     <span id="debug-gesture-fist" class="debug-value">✗</span>
                 </div>
+                <div class="debug-row">
+                    <span class="debug-label">Wave:</span>
+                    <span id="debug-gesture-wave" class="debug-value">✗</span>
+                </div>
             </div>
 
             <div class="debug-section">
@@ -514,6 +546,18 @@ function createPanelDOM() {
             </div>
 
             <div class="debug-section">
+                <div class="debug-section-title">👋 Hello Wave</div>
+                <div class="debug-row">
+                    <span class="debug-label">Waving:</span>
+                    <span id="debug-hello-waving" class="debug-value">No</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">Anim:</span>
+                    <span id="debug-anim-state" class="debug-value-small">🔮 Ball</span>
+                </div>
+            </div>
+
+            <div class="debug-section">
                 <div class="debug-section-title">⚡ Performance</div>
                 <div class="debug-row">
                     <span class="debug-label">FPS:</span>
@@ -546,12 +590,15 @@ function cacheElements() {
         'debug-zoom-mode', 'debug-both-ok', 'debug-zoom-distance', 'debug-zoom-delta',
         'debug-zoom-scale', 'debug-pos', 'debug-count',
         'debug-spread', 'debug-color', 'debug-ripples', 'debug-fps',
+        // Hello wave states
+        'debug-hello-waving', 'debug-anim-state',
         // Finger states
         'debug-finger-thumb', 'debug-finger-index', 'debug-finger-middle',
         'debug-finger-ring', 'debug-finger-pinky', 'debug-finger-count',
         // Gesture states
         'debug-gesture-point', 'debug-gesture-victory', 'debug-gesture-thumbsup',
         'debug-gesture-ok', 'debug-gesture-openpalm', 'debug-gesture-fist',
+        'debug-gesture-wave',
         // Palm direction
         'debug-palm-dir', 'debug-palm-facing',
         // Two hands

@@ -56,8 +56,27 @@
 .debug-content {
     padding: 10px 12px;
     transition: max-height 0.3s ease, opacity 0.3s ease;
-    max-height: 500px;
-    overflow: hidden;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+/* 自定义滚动条样式 */
+.debug-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.debug-content::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+.debug-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+}
+
+.debug-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
 }
 
 .debug-panel.hidden .debug-content {

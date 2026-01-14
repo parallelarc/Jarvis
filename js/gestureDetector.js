@@ -25,11 +25,21 @@ const CONFIG = {
     // OK手势判定阈值 (拇指-食指距离)
     OK_THRESHOLD: 0.06,
 
-    // 挥手检测速度阈值
-    WAVE_SPEED_THRESHOLD: 0.1,
+    // 挥手检测参数
+    WAVE_SPEED_THRESHOLD: 0.03,     // X轴移动阈值
+    WAVE_TIME_WINDOW_MS: 900,       // 挥手检测时间窗口（ms）
+    WAVE_MIN_SAMPLES: 5,            // 最少采样点数
+    WAVE_MIN_AMPLITUDE: 0.01,       // 最小挥手幅度（更灵敏）
+    WAVE_MIN_DELTA_X: 0.002,        // 单步X变化阈值（过滤抖动）
+    WAVE_DIRECTION_CHANGES: 1,      // 最小方向改变次数（更灵敏）
+    WAVE_Y_RANGE_RATIO: 5.0,        // Y轴变化上限倍数（更宽松）
+    WAVE_VELOCITY_THRESHOLD: 0.15,  // 速度阈值（单位/秒）
 
-    // 挥动采样帧数
-    WAVE_SAMPLE_FRAMES: 10
+    // Hello waving打招呼检测参数（保持原有）
+    WAVE_X_THRESHOLD: 0.01,        // X轴移动阈值（更灵敏）
+    WAVE_MIN_DIRECTION_CHANGES: 1, // 最小方向改变次数（更灵敏）
+    WAVE_RAISE_Y_THRESHOLD: 0.7,   // 手举起Y阈值（更宽松）
+    WAVE_TRIGGER_DURATION: 800     // 触发所需的持续时间(ms)
 };
 
 // ========== 内部状态 ==========
@@ -38,13 +48,33 @@ const CONFIG = {
 const gestureHistory = {
     leftHand: {
         positions: [],
+        velocities: [],          // 新增：跟踪速度
         lastWaveTime: 0,
-        isWaving: false
+        isWaving: false,
+        waveDirectionChanges: 0, // 新增：方向变化计数
+        lastX: null,             // 新增：上次X位置
+        lastVelocityX: 0,        // 新增：上次X速度
+        // Hello waving打招呼状态
+        waveStartTime: 0,
+        helloDirectionChanges: 0,
+        lastHelloX: null,
+        lastHelloDirection: 0,
+        consecutiveWaveFrames: 0
     },
     rightHand: {
         positions: [],
+        velocities: [],          // 新增：跟踪速度
         lastWaveTime: 0,
-        isWaving: false
+        isWaving: false,
+        waveDirectionChanges: 0, // 新增：方向变化计数
+        lastX: null,             // 新增：上次X位置
+        lastVelocityX: 0,        // 新增：上次X速度
+        // Hello waving打招呼状态
+        waveStartTime: 0,
+        helloDirectionChanges: 0,
+        lastHelloX: null,
+        lastHelloDirection: 0,
+        consecutiveWaveFrames: 0
     }
 };
 
@@ -482,16 +512,33 @@ export function getPalmDirection(landmarks) {
  */
 function updateGestureHistory(handKey, position) {
     const history = gestureHistory[handKey];
-    history.positions.push(position);
+    const now = performance.now();
+    const entry = { x: position.x, y: position.y, t: now };
+    history.positions.push(entry);
 
-    // 保持固定长度的历史记录
-    if (history.positions.length > CONFIG.WAVE_SAMPLE_FRAMES) {
+    // 计算X轴速度
+    let velocityX = 0;
+    if (history.positions.length >= 2) {
+        const prevPos = history.positions[history.positions.length - 2];
+        const dt = entry.t - prevPos.t;
+        if (dt > 0) {
+            velocityX = (entry.x - prevPos.x) / (dt / 1000);
+        }
+    }
+    history.velocities.push(velocityX);
+
+    // 保持固定时间窗口的历史记录
+    while (history.positions.length > 0 &&
+           now - history.positions[0].t > CONFIG.WAVE_TIME_WINDOW_MS) {
         history.positions.shift();
+        history.velocities.shift();
     }
 }
 
 /**
- * 检测挥手手势
+ * 检测挥手手势 - 优化版
+ * 核心原理：检测X轴的**来回摆动**（方向反复变化），而不仅仅是位移范围
+ *
  * @param {Array} landmarks - 21个关键点
  * @param {string} handKey - 'leftHand' 或 'rightHand'
  * @returns {boolean} 是否在挥手
@@ -501,24 +548,51 @@ export function isWaving(landmarks, handKey = 'rightHand') {
     updateGestureHistory(handKey, palmCenter);
 
     const history = gestureHistory[handKey];
-    if (history.positions.length < CONFIG.WAVE_SAMPLE_FRAMES) {
+
+    if (history.positions.length < CONFIG.WAVE_MIN_SAMPLES) {
         return false;
     }
 
-    // 计算x方向的变化范围
+    // 1. 计算X轴位移范围
     const xPositions = history.positions.map(p => p.x);
     const minX = Math.min(...xPositions);
     const maxX = Math.max(...xPositions);
     const xRange = maxX - minX;
 
-    // 计算y方向的变化范围（应该较小）
+    // 检查最小幅度
+    if (xRange < CONFIG.WAVE_MIN_AMPLITUDE) {
+        return false;
+    }
+
+    // 2. 计算Y轴位移（挥手时Y轴变化不宜过大）
     const yPositions = history.positions.map(p => p.y);
     const minY = Math.min(...yPositions);
     const maxY = Math.max(...yPositions);
     const yRange = maxY - minY;
 
-    // 挥手条件：x方向变化大，y方向变化小
-    return xRange > CONFIG.WAVE_SPEED_THRESHOLD && yRange < xRange / 2;
+    // Y轴变化不应明显大于X轴变化
+    if (yRange > xRange * CONFIG.WAVE_Y_RANGE_RATIO) {
+        return false;
+    }
+
+    // 3. 检测方向变化次数（基于位置序列）
+    let directionChanges = 0;
+    let lastDirection = 0;
+
+    for (let i = 1; i < history.positions.length; i++) {
+        const dx = history.positions[i].x - history.positions[i - 1].x;
+        if (Math.abs(dx) < CONFIG.WAVE_MIN_DELTA_X) {
+            continue;
+        }
+        const direction = dx > 0 ? 1 : -1;
+        if (lastDirection !== 0 && direction !== lastDirection) {
+            directionChanges++;
+        }
+        lastDirection = direction;
+    }
+
+    // 4. 判断是否满足挥手条件
+    return directionChanges >= CONFIG.WAVE_DIRECTION_CHANGES;
 }
 
 /**
@@ -528,6 +602,97 @@ export function isWaving(landmarks, handKey = 'rightHand') {
 export function resetWaveHistory(handKey = 'rightHand') {
     if (gestureHistory[handKey]) {
         gestureHistory[handKey].positions = [];
+        gestureHistory[handKey].velocities = [];
+        gestureHistory[handKey].waveDirectionChanges = 0;
+        gestureHistory[handKey].lastVelocityX = 0;
+    }
+}
+
+/**
+ * 更新Hello挥手状态（内部函数）
+ * @param {string} handKey - 'leftHand' 或 'rightHand'
+ * @param {Object} palmCenter - 手掌中心 {x, y, z}
+ * @param {boolean} isHandRaised - 手是否举起
+ */
+function updateHelloWaveState(handKey, palmCenter, isHandRaised) {
+    const state = gestureHistory[handKey];
+
+    // 手放下时重置
+    if (!isHandRaised) {
+        state.waveStartTime = 0;
+        state.helloDirectionChanges = 0;
+        state.consecutiveWaveFrames = 0;
+        state.lastHelloX = null;
+        state.lastHelloDirection = 0;
+        return;
+    }
+
+    // 追踪X方向变化
+    if (state.lastHelloX !== null) {
+        const deltaX = palmCenter.x - state.lastHelloX;
+        const direction = deltaX > CONFIG.WAVE_X_THRESHOLD ? 1 :
+                         (deltaX < -CONFIG.WAVE_X_THRESHOLD ? -1 : 0);
+
+        // 检测方向改变
+        if (direction !== 0 && direction !== state.lastHelloDirection && state.lastHelloDirection !== 0) {
+            state.helloDirectionChanges++;
+            state.lastHelloDirection = direction;
+        } else if (direction !== 0 && state.lastHelloDirection === 0) {
+            state.lastHelloDirection = direction;
+        }
+
+        // 达到最小方向改变次数
+        if (state.helloDirectionChanges >= CONFIG.WAVE_MIN_DIRECTION_CHANGES) {
+            if (state.waveStartTime === 0) {
+                state.waveStartTime = Date.now();
+            }
+            state.consecutiveWaveFrames++;
+        }
+    }
+
+    state.lastHelloX = palmCenter.x;
+}
+
+/**
+ * 检测Hello打招呼挥手手势（举手并挥动，持续2秒）
+ * @param {Array} landmarks - 21个关键点
+ * @param {string} handKey - 'leftHand' 或 'rightHand'
+ * @returns {Object} {isWaving: boolean, duration: number}
+ */
+export function isHelloWaving(landmarks, handKey = 'rightHand') {
+    const palmCenter = getPalmCenter(landmarks);
+
+    // 1. 检测手是否举起 (Y坐标小于阈值，手掌张开)
+    const isHandRaised = palmCenter.y < CONFIG.WAVE_RAISE_Y_THRESHOLD && isOpenPalm(landmarks);
+
+    // 2. 更新挥手状态
+    updateHelloWaveState(handKey, palmCenter, isHandRaised);
+
+    const waveState = gestureHistory[handKey];
+
+    // 3. 判断是否满足触发条件
+    if (waveState.waveStartTime > 0) {
+        const duration = Date.now() - waveState.waveStartTime;
+        if (duration > CONFIG.WAVE_TRIGGER_DURATION && waveState.consecutiveWaveFrames > 5) {
+            return { isWaving: true, duration };
+        }
+    }
+
+    return { isWaving: false, duration: 0 };
+}
+
+/**
+ * 重置Hello挥手状态
+ * @param {string} handKey - 'leftHand' 或 'rightHand'
+ */
+export function resetHelloWave(handKey = 'rightHand') {
+    const state = gestureHistory[handKey];
+    if (state) {
+        state.waveStartTime = 0;
+        state.helloDirectionChanges = 0;
+        state.consecutiveWaveFrames = 0;
+        state.lastHelloX = null;
+        state.lastHelloDirection = 0;
     }
 }
 
@@ -590,6 +755,9 @@ export function detectHandGestures(landmarks, handedness = 'Right') {
     const palmCenter = getPalmCenter(landmarks);
     const handKey = handedness === 'Left' ? 'leftHand' : 'rightHand';
 
+    // 检测Hello打招呼挥手
+    const helloWaving = isHelloWaving(landmarks, handKey);
+
     return {
         // 基础手指状态
         fingers: {
@@ -639,7 +807,8 @@ export function detectHandGestures(landmarks, handedness = 'Right') {
 
         // 动态手势
         dynamic: {
-            waving: isWaving(landmarks, handKey)
+            waving: isWaving(landmarks, handKey),
+            helloWaving: helloWaving
         }
     };
 }
