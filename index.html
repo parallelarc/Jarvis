@@ -80,7 +80,7 @@
     <script src="./models/libs/three.min.js"></script>
     <script type="module">
         import { initDebugPanel, updateDebugPanel } from './js/debugPanel.js';
-        import { detectAllGestures } from './js/gestureDetector.js';
+        import { detectAllGestures, getPalmCenter } from './js/gestureDetector.js';
 
         document.addEventListener('DOMContentLoaded', () => {
             const videoElement = document.getElementById('webcam');
@@ -104,6 +104,18 @@
             let dragOffset = { x: 0, y: 0, z: 0 };  // 抓取点与球心的偏移
             let spherePosition = { x: 0, y: 0, z: 0 };  // 球体当前位置
             const handPinchThreshold = 0.08;  // 捏合判定阈值
+
+            // Left hand interaction state
+            let leftHandTouching = false;     // 左手是否触摸球体
+            let leftHandPinching = false;     // 左手是否在捏合
+            let leftHandPinchDistance = 0;
+
+            // Two-hand zoom state
+            let isZoomMode = false;           // 是否处于双手缩放模式
+            let zoomInitialSpread = 1.0;      // 缩放开始时的球体大小
+            let zoomLeftInitialDist = 0;      // 左手到球心初始距离
+            let zoomRightInitialDist = 0;     // 右手到球心初始距离
+            let zoomCurrentDistance = 0;      // 当前两手距离 (调试用)
 
             // Gesture detection state
             let previousHandsDistance = null;  // 用于检测双手缩放手势
@@ -288,6 +300,9 @@
             function animate() {
                 requestAnimationFrame(animate);
 
+                // Smoothly update currentSpread towards targetSpread
+                currentSpread += (targetSpread - currentSpread) * spreadSmoothing;
+
                 if (particleSystem) {
                     const time = Date.now() * 0.001;
 
@@ -434,6 +449,17 @@
                     y: (0.5 - point.y) * 10,
                     z: 0
                 };
+            }
+
+            // Get landmarks for a specific hand by handedness label
+            function getHandLandmarks(results, handedness) {
+                if (!results.multiHandLandmarks || !results.multiHandedness) return null;
+                for (let i = 0; i < results.multiHandedness.length; i++) {
+                    if (results.multiHandedness[i].label === handedness) {
+                        return results.multiHandLandmarks[i];
+                    }
+                }
+                return null;
             }
 
             // Get contact point on particle system
@@ -646,13 +672,133 @@
                             // Draw the hand landmarks AFTER computing state
                             drawLandmarks(landmarks, isLeftHand, isTouching, isSelected);
                         } else {
-                            // LEFT HAND: Only draw, no interaction
+                            // LEFT HAND: Touch detection for two-hand zoom
+                            const thumbTip = landmarks[4];
+                            const indexTip = landmarks[8];
+
+                            const thumbNear = isPointNearParticlesWithPos(thumbTip, spherePosition, currentSpread);
+                            const indexNear = isPointNearParticlesWithPos(indexTip, spherePosition, currentSpread);
+                            leftHandTouching = thumbNear && indexNear;
+
+                            const pinchDist = calculateDistance(thumbTip, indexTip);
+                            leftHandPinching = pinchDist < handPinchThreshold;
+                            leftHandPinchDistance = pinchDist;
+
                             leftHandActive = true;
-                            drawLandmarks(landmarks, isLeftHand, false, false);
+                            drawLandmarks(landmarks, isLeftHand, leftHandTouching, leftHandPinching);
                         }
                     }
                 } else {
                     statusElement.textContent = 'No hands detected';
+                    // Reset left hand states when no hands detected
+                    leftHandTouching = false;
+                    leftHandPinching = false;
+                    leftHandPinchDistance = 0;
+                }
+
+                // Two-hand zoom state machine
+                const rightTouching = isTouching;
+                const rightPinching = isSelected;
+                const bothTouching = leftHandTouching && rightTouching;
+                const bothPinching = leftHandPinching && rightPinching;
+
+                if (isZoomMode) {
+                    // Already in zoom mode - continue zooming or exit
+                    if (bothPinching) {
+                        // Anchor-based zoom: keep pinched points under hands
+                        const leftLandmarks = getHandLandmarks(results, 'Left');
+                        const rightLandmarks = getHandLandmarks(results, 'Right');
+
+                        if (leftLandmarks && rightLandmarks) {
+                            // Get current hand world positions (use index finger tip)
+                            const leftIndex = leftLandmarks[8];
+                            const rightIndex = rightLandmarks[8];
+
+                            const leftWorldPos = {
+                                x: (leftIndex.x - 0.5) * 10,
+                                y: (0.5 - leftIndex.y) * 10,
+                                z: 0
+                            };
+                            const rightWorldPos = {
+                                x: (rightIndex.x - 0.5) * 10,
+                                y: (0.5 - rightIndex.y) * 10,
+                                z: 0
+                            };
+
+                            // Calculate distance from each hand to sphere center
+                            const leftCurrentDist = Math.sqrt(
+                                Math.pow(leftWorldPos.x - spherePosition.x, 2) +
+                                Math.pow(leftWorldPos.y - spherePosition.y, 2) +
+                                Math.pow(leftWorldPos.z - spherePosition.z, 2)
+                            );
+                            const rightCurrentDist = Math.sqrt(
+                                Math.pow(rightWorldPos.x - spherePosition.x, 2) +
+                                Math.pow(rightWorldPos.y - spherePosition.y, 2) +
+                                Math.pow(rightWorldPos.z - spherePosition.z, 2)
+                            );
+
+                            // Calculate scale ratio for each hand
+                            const leftScale = zoomLeftInitialDist > 0 ? leftCurrentDist / zoomLeftInitialDist : 1;
+                            const rightScale = zoomRightInitialDist > 0 ? rightCurrentDist / zoomRightInitialDist : 1;
+
+                            // Use average scale for smooth zoom
+                            const avgScale = (leftScale + rightScale) / 2;
+
+                            // Apply scale with limits
+                            targetSpread = Math.max(0.3, Math.min(5.0, zoomInitialSpread * avgScale));
+
+                            // Update debug info
+                            zoomCurrentDistance = calculateDistance(
+                                getPalmCenter(leftLandmarks),
+                                getPalmCenter(rightLandmarks)
+                            );
+                        }
+                    } else {
+                        // At least one hand released pinch - exit zoom mode
+                        isZoomMode = false;
+                    }
+                } else if (bothTouching && bothPinching) {
+                    // Both hands touching and pinching - enter zoom mode
+                    isZoomMode = true;
+
+                    // Record initial state for anchor-based zoom
+                    const leftLandmarks = getHandLandmarks(results, 'Left');
+                    const rightLandmarks = getHandLandmarks(results, 'Right');
+
+                    if (leftLandmarks && rightLandmarks) {
+                        // Get initial hand world positions (use index finger tip)
+                        const leftIndex = leftLandmarks[8];
+                        const rightIndex = rightLandmarks[8];
+
+                        const leftWorldPos = {
+                            x: (leftIndex.x - 0.5) * 10,
+                            y: (0.5 - leftIndex.y) * 10,
+                            z: 0
+                        };
+                        const rightWorldPos = {
+                            x: (rightIndex.x - 0.5) * 10,
+                            y: (0.5 - rightIndex.y) * 10,
+                            z: 0
+                        };
+
+                        // Calculate initial distance from each hand to sphere center
+                        zoomLeftInitialDist = Math.sqrt(
+                            Math.pow(leftWorldPos.x - spherePosition.x, 2) +
+                            Math.pow(leftWorldPos.y - spherePosition.y, 2) +
+                            Math.pow(leftWorldPos.z - spherePosition.z, 2)
+                        );
+                        zoomRightInitialDist = Math.sqrt(
+                            Math.pow(rightWorldPos.x - spherePosition.x, 2) +
+                            Math.pow(rightWorldPos.y - spherePosition.y, 2) +
+                            Math.pow(rightWorldPos.z - spherePosition.z, 2)
+                        );
+
+                        zoomInitialSpread = currentSpread;
+                        zoomCurrentDistance = calculateDistance(
+                            getPalmCenter(leftLandmarks),
+                            getPalmCenter(rightLandmarks)
+                        );
+                    }
                 }
 
                 // Detect all gestures using the gesture detector module
@@ -674,9 +820,18 @@
                     isSelected: isSelected,
                     spherePosition: { ...spherePosition },
                     spread: currentSpread,
+                    targetSpread: targetSpread,
                     baseColor: { ...baseColor },
                     ripplesCount: ripples.length,
-                    gestures: allGestures  // 添加完整的手势状态
+                    gestures: allGestures,  // 添加完整的手势状态
+                    // Two-hand zoom state
+                    isZoomMode: isZoomMode,
+                    leftHandTouching: leftHandTouching,
+                    leftHandPinching: leftHandPinching,
+                    bothTouching: bothTouching,
+                    bothPinching: bothPinching,
+                    zoomDistance: zoomCurrentDistance,
+                    zoomInitialSpread: zoomInitialSpread
                 });
             }
             

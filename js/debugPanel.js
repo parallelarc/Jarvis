@@ -94,6 +94,62 @@ export function updateDebugPanel(data) {
         }
     }
 
+    // Update left hand touch and pinch states
+    if (data.leftHandTouching !== undefined) {
+        const el = elements['debug-left-touching'];
+        if (el) {
+            el.textContent = data.leftHandTouching ? 'Yes' : 'No';
+            el.style.color = data.leftHandTouching ? '#00ff00' : '#888';
+        }
+    }
+
+    if (data.leftHandPinching !== undefined) {
+        const el = elements['debug-left-pinching'];
+        if (el) {
+            el.textContent = data.leftHandPinching ? 'Yes' : 'No';
+            el.style.color = data.leftHandPinching ? '#ffffff' : '#888';
+        }
+    }
+
+    // Update zoom mode state
+    if (data.isZoomMode !== undefined) {
+        const el = elements['debug-zoom-mode'];
+        if (el) {
+            el.textContent = data.isZoomMode ? '🔍 Active' : 'No';
+            el.style.color = data.isZoomMode ? '#ff00ff' : '#888';
+        }
+    }
+
+    // Update both hands ready state
+    if (data.bothTouching !== undefined && data.bothPinching !== undefined) {
+        const el = elements['debug-both-ok'];
+        if (el) {
+            const bothReady = data.bothTouching && data.bothPinching;
+            el.textContent = bothReady ? '✓✓' : (data.bothTouching ? 'Touch' : (data.bothPinching ? 'Pinch' : '—'));
+            el.style.color = bothReady ? '#00ff00' : '#888';
+        }
+    }
+
+    // Update zoom distance
+    if (data.zoomDistance !== undefined) {
+        setText('debug-zoom-distance', data.zoomDistance.toFixed(3));
+    }
+
+    // Update zoom delta (scale - 1)
+    if (data.targetSpread !== undefined && data.zoomInitialSpread !== undefined) {
+        const scale = data.zoomInitialSpread > 0 ? data.targetSpread / data.zoomInitialSpread : 1;
+        const delta = scale - 1;
+        const deltaText = Math.abs(delta).toFixed(2);
+        const sign = delta > 0 ? '+' : '';
+        setText('debug-zoom-delta', sign + deltaText);
+    }
+
+    // Update zoom scale ratio
+    if (data.targetSpread !== undefined && data.zoomInitialSpread !== undefined) {
+        const scale = data.zoomInitialSpread > 0 ? data.targetSpread / data.zoomInitialSpread : 1;
+        setText('debug-zoom-scale', scale.toFixed(2) + 'x');
+    }
+
     // Update sphere position
     if (data.spherePosition) {
         const pos = data.spherePosition;
@@ -311,6 +367,34 @@ function createPanelDOM() {
                     <span class="debug-label">Selected:</span>
                     <span id="debug-selected" class="debug-value">No</span>
                 </div>
+                <div class="debug-row">
+                    <span class="debug-label">L-Touch:</span>
+                    <span id="debug-left-touching" class="debug-value">No</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">L-Pinch:</span>
+                    <span id="debug-left-pinching" class="debug-value">No</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">Zoom Mode:</span>
+                    <span id="debug-zoom-mode" class="debug-value">No</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">Both OK:</span>
+                    <span id="debug-both-ok" class="debug-value">—</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">Hands Dist:</span>
+                    <span id="debug-zoom-distance" class="debug-value-small">0.00</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">Delta:</span>
+                    <span id="debug-zoom-delta" class="debug-value-small">0.00</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">Scale:</span>
+                    <span id="debug-zoom-scale" class="debug-value-small">1.00x</span>
+                </div>
             </div>
 
             <div class="debug-section">
@@ -458,7 +542,9 @@ function createPanelDOM() {
 function cacheElements() {
     const ids = [
         'debug-left-hand', 'debug-right-hand', 'debug-pinch-bar', 'debug-pinch-value',
-        'debug-touching', 'debug-selected', 'debug-pos', 'debug-count',
+        'debug-touching', 'debug-selected', 'debug-left-touching', 'debug-left-pinching',
+        'debug-zoom-mode', 'debug-both-ok', 'debug-zoom-distance', 'debug-zoom-delta',
+        'debug-zoom-scale', 'debug-pos', 'debug-count',
         'debug-spread', 'debug-color', 'debug-ripples', 'debug-fps',
         // Finger states
         'debug-finger-thumb', 'debug-finger-index', 'debug-finger-middle',
