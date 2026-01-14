@@ -457,8 +457,11 @@ export function getPalmNormal(landmarks) {
  */
 export function isPalmFacingUp(landmarks) {
     const normal = getPalmNormal(landmarks);
-    // 法向量的 z 分量为正表示朝上（在 MediaPipe 坐标系中）
-    return normal.z > 0;
+    const absX = Math.abs(normal.x);
+    const absY = Math.abs(normal.y);
+    const absZ = Math.abs(normal.z);
+    // Y轴主导且为负，表示朝上
+    return absY > absX && absY > absZ && normal.y < 0;
 }
 
 /**
@@ -468,7 +471,11 @@ export function isPalmFacingUp(landmarks) {
  */
 export function isPalmFacingDown(landmarks) {
     const normal = getPalmNormal(landmarks);
-    return normal.z < 0;
+    const absX = Math.abs(normal.x);
+    const absY = Math.abs(normal.y);
+    const absZ = Math.abs(normal.z);
+    // Y轴主导且为正，表示朝下
+    return absY > absX && absY > absZ && normal.y > 0;
 }
 
 /**
@@ -478,7 +485,7 @@ export function isPalmFacingDown(landmarks) {
  */
 export function isPalmFacingCamera(landmarks) {
     const normal = getPalmNormal(landmarks);
-    // 法向量的 z 分量绝对值较大表示朝向摄像头
+    // Z轴主导表示朝向摄像头（仅判断主导轴，忽略正负）
     return Math.abs(normal.z) > Math.abs(normal.x) && Math.abs(normal.z) > Math.abs(normal.y);
 }
 
@@ -495,12 +502,12 @@ export function getPalmDirection(landmarks) {
     const absZ = Math.abs(normal.z);
 
     if (absZ > absX && absZ > absY) {
-        return normal.z > 0 ? 'up' : 'down';
+        return normal.z > 0 ? 'camera' : 'away';
     }
     if (absX > absY && absX > absZ) {
         return normal.x > 0 ? 'right' : 'left';
     }
-    return normal.y > 0 ? 'camera' : 'away';
+    return normal.y > 0 ? 'down' : 'up';
 }
 
 // ========== 动态手势检测 ==========
@@ -544,6 +551,11 @@ function updateGestureHistory(handKey, position) {
  * @returns {boolean} 是否在挥手
  */
 export function isWaving(landmarks, handKey = 'rightHand') {
+    // Only count waving when the palm is open, facing the camera, and not OK.
+    if (!isOpenPalm(landmarks) || !isPalmFacingCamera(landmarks) || isOKGesture(landmarks)) {
+        return false;
+    }
+
     const palmCenter = getPalmCenter(landmarks);
     updateGestureHistory(handKey, palmCenter);
 
