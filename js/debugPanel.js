@@ -115,6 +115,128 @@ export function updateDebugPanel(data) {
     if (data.ripplesCount !== undefined) {
         setText('debug-ripples', data.ripplesCount.toString());
     }
+
+    // Update gesture states if provided
+    if (data.gestures) {
+        updateGestureStates(data.gestures);
+    }
+}
+
+/**
+ * Update gesture states display
+ * @param {Object} gestures - Gesture detection results
+ */
+function updateGestureStates(gestures) {
+    // Use right hand as primary, fallback to left hand
+    const handGestures = gestures.right || gestures.left;
+
+    if (!handGestures) {
+        // Clear all gesture displays
+        clearGestureDisplays();
+        return;
+    }
+
+    // Update finger states
+    const fingers = handGestures.fingers;
+    if (fingers) {
+        setFingerState('debug-finger-thumb', fingers.thumb);
+        setFingerState('debug-finger-index', fingers.index);
+        setFingerState('debug-finger-middle', fingers.middle);
+        setFingerState('debug-finger-ring', fingers.ring);
+        setFingerState('debug-finger-pinky', fingers.pinky);
+        setText('debug-finger-count', fingers.extendedCount?.toString() || '0');
+    }
+
+    // Update gesture states
+    const gestureStates = handGestures.gestures;
+    if (gestureStates) {
+        setGestureState('debug-gesture-point', gestureStates.pointing);
+        setGestureState('debug-gesture-victory', gestureStates.victory);
+        setGestureState('debug-gesture-thumbsup', gestureStates.thumbsUp);
+        setGestureState('debug-gesture-ok', gestureStates.ok);
+        setGestureState('debug-gesture-openpalm', gestureStates.openPalm);
+        setGestureState('debug-gesture-fist', gestureStates.fist);
+    }
+
+    // Update palm direction
+    const palm = handGestures.palm;
+    if (palm) {
+        setText('debug-palm-dir', palm.direction || '—');
+
+        let facingText = '—';
+        if (palm.facingUp) facingText = 'Up';
+        else if (palm.facingDown) facingText = 'Down';
+        else if (palm.facingCamera) facingText = 'Camera';
+        setText('debug-palm-facing', facingText);
+    }
+
+    // Update two hands states
+    const twoHand = gestures.twoHand;
+    if (twoHand) {
+        setText('debug-two-both', twoHand.bothPresent ? '✓' : '✗');
+        setText('debug-two-distance', twoHand.distance?.toFixed(3) || '0.000');
+
+        let zoomText = '—';
+        if (twoHand.zoom?.isZoom) {
+            zoomText = twoHand.zoom.direction === 'in' ? '🔍+' : '🔍-';
+        }
+        setText('debug-two-zoom', zoomText);
+    }
+}
+
+/**
+ * Set finger state display
+ */
+function setFingerState(elementId, isExtended) {
+    const el = elements[elementId];
+    if (el) {
+        el.textContent = isExtended ? '↑' : '—';
+        el.style.color = isExtended ? '#00ff00' : '#666';
+    }
+}
+
+/**
+ * Set gesture state display
+ */
+function setGestureState(elementId, isActive) {
+    const el = elements[elementId];
+    if (el) {
+        el.textContent = isActive ? '✓' : '✗';
+        el.style.color = isActive ? '#00ffff' : '#666';
+    }
+}
+
+/**
+ * Clear all gesture displays when no hands detected
+ */
+function clearGestureDisplays() {
+    const fingerIds = ['debug-finger-thumb', 'debug-finger-index', 'debug-finger-middle',
+                       'debug-finger-ring', 'debug-finger-pinky'];
+    fingerIds.forEach(id => {
+        const el = elements[id];
+        if (el) {
+            el.textContent = '—';
+            el.style.color = '#666';
+        }
+    });
+
+    setText('debug-finger-count', '0');
+
+    const gestureIds = ['debug-gesture-point', 'debug-gesture-victory', 'debug-gesture-thumbsup',
+                        'debug-gesture-ok', 'debug-gesture-openpalm', 'debug-gesture-fist'];
+    gestureIds.forEach(id => {
+        const el = elements[id];
+        if (el) {
+            el.textContent = '✗';
+            el.style.color = '#666';
+        }
+    });
+
+    setText('debug-palm-dir', '—');
+    setText('debug-palm-facing', '—');
+    setText('debug-two-both', '✗');
+    setText('debug-two-distance', '0.000');
+    setText('debug-two-zoom', '—');
 }
 
 /**
@@ -200,6 +322,90 @@ function createPanelDOM() {
             </div>
 
             <div class="debug-section">
+                <div class="debug-section-title">🖐️ Fingers</div>
+                <div class="debug-row">
+                    <span class="debug-label">Thumb:</span>
+                    <span id="debug-finger-thumb" class="debug-value">—</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">Index:</span>
+                    <span id="debug-finger-index" class="debug-value">—</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">Middle:</span>
+                    <span id="debug-finger-middle" class="debug-value">—</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">Ring:</span>
+                    <span id="debug-finger-ring" class="debug-value">—</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">Pinky:</span>
+                    <span id="debug-finger-pinky" class="debug-value">—</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">Extended:</span>
+                    <span id="debug-finger-count" class="debug-value">0</span>
+                </div>
+            </div>
+
+            <div class="debug-section">
+                <div class="debug-section-title">✋ Gestures</div>
+                <div class="debug-row">
+                    <span class="debug-label">Point:</span>
+                    <span id="debug-gesture-point" class="debug-value">✗</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">Victory:</span>
+                    <span id="debug-gesture-victory" class="debug-value">✗</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">ThumbsUp:</span>
+                    <span id="debug-gesture-thumbsup" class="debug-value">✗</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">OK:</span>
+                    <span id="debug-gesture-ok" class="debug-value">✗</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">OpenPalm:</span>
+                    <span id="debug-gesture-openpalm" class="debug-value">✗</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">Fist:</span>
+                    <span id="debug-gesture-fist" class="debug-value">✗</span>
+                </div>
+            </div>
+
+            <div class="debug-section">
+                <div class="debug-section-title">🧭 Palm Direction</div>
+                <div class="debug-row">
+                    <span class="debug-label">Dir:</span>
+                    <span id="debug-palm-dir" class="debug-value">—</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">Facing:</span>
+                    <span id="debug-palm-facing" class="debug-value-small">—</span>
+                </div>
+            </div>
+
+            <div class="debug-section">
+                <div class="debug-section-title">🤝 Two Hands</div>
+                <div class="debug-row">
+                    <span class="debug-label">Both:</span>
+                    <span id="debug-two-both" class="debug-value">✗</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">Distance:</span>
+                    <span id="debug-two-distance" class="debug-value-small">0.00</span>
+                </div>
+                <div class="debug-row">
+                    <span class="debug-label">Zoom:</span>
+                    <span id="debug-two-zoom" class="debug-value">—</span>
+                </div>
+            </div>
+
+            <div class="debug-section">
                 <div class="debug-section-title">✨ Particles</div>
                 <div class="debug-row">
                     <span class="debug-label">Count:</span>
@@ -253,7 +459,17 @@ function cacheElements() {
     const ids = [
         'debug-left-hand', 'debug-right-hand', 'debug-pinch-bar', 'debug-pinch-value',
         'debug-touching', 'debug-selected', 'debug-pos', 'debug-count',
-        'debug-spread', 'debug-color', 'debug-ripples', 'debug-fps'
+        'debug-spread', 'debug-color', 'debug-ripples', 'debug-fps',
+        // Finger states
+        'debug-finger-thumb', 'debug-finger-index', 'debug-finger-middle',
+        'debug-finger-ring', 'debug-finger-pinky', 'debug-finger-count',
+        // Gesture states
+        'debug-gesture-point', 'debug-gesture-victory', 'debug-gesture-thumbsup',
+        'debug-gesture-ok', 'debug-gesture-openpalm', 'debug-gesture-fist',
+        // Palm direction
+        'debug-palm-dir', 'debug-palm-facing',
+        // Two hands
+        'debug-two-both', 'debug-two-distance', 'debug-two-zoom'
     ];
 
     ids.forEach(id => {

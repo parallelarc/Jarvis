@@ -80,6 +80,7 @@
     <script src="./models/libs/three.min.js"></script>
     <script type="module">
         import { initDebugPanel, updateDebugPanel } from './js/debugPanel.js';
+        import { detectAllGestures } from './js/gestureDetector.js';
 
         document.addEventListener('DOMContentLoaded', () => {
             const videoElement = document.getElementById('webcam');
@@ -103,6 +104,9 @@
             let dragOffset = { x: 0, y: 0, z: 0 };  // 抓取点与球心的偏移
             let spherePosition = { x: 0, y: 0, z: 0 };  // 球体当前位置
             const handPinchThreshold = 0.08;  // 捏合判定阈值
+
+            // Gesture detection state
+            let previousHandsDistance = null;  // 用于检测双手缩放手势
 
             // Particle system variables
             let particleSystem;
@@ -651,6 +655,16 @@
                     statusElement.textContent = 'No hands detected';
                 }
 
+                // Detect all gestures using the gesture detector module
+                const allGestures = detectAllGestures(results, previousHandsDistance);
+
+                // Update previous hands distance for zoom detection
+                if (allGestures.twoHand && allGestures.twoHand.bothPresent) {
+                    previousHandsDistance = allGestures.twoHand.distance;
+                } else {
+                    previousHandsDistance = null;
+                }
+
                 // Update debug panel with current state
                 updateDebugPanel({
                     leftHand: leftHandActive,
@@ -661,7 +675,8 @@
                     spherePosition: { ...spherePosition },
                     spread: currentSpread,
                     baseColor: { ...baseColor },
-                    ripplesCount: ripples.length
+                    ripplesCount: ripples.length,
+                    gestures: allGestures  // 添加完整的手势状态
                 });
             }
             
