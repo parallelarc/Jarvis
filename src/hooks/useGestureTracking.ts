@@ -9,8 +9,8 @@ import { animationActions, animationSelectors } from '@/stores/animationStore';
 import { particleActions, particleStore } from '@/stores/particleStore';
 import { GESTURE_CONFIG } from '@/config';
 import { normalizedToWorld, calculateDistance } from '@/utils/math';
+import { detectHandGestures } from '@/domain/GestureDetector';
 import type { Landmarks } from '@/core/types';
-import { detectZoomGesture } from '@/domain/GestureDetector';
 
 // MediaPipe 类型声明
 declare global {
@@ -73,6 +73,34 @@ export function useGestureTracking() {
   }
 
   /**
+   * 根据优先级获取主手势名称
+   * 防止 UI 闪烁：当多个手势同时为 true 时，按优先级返回
+   */
+  function getPrimaryGesture(gestures: {
+    pointing: boolean;
+    victory: boolean;
+    thumbsUp: boolean;
+    thumbsDown: boolean;
+    ok: boolean;
+    callMe: boolean;
+    rockOn: boolean;
+    openPalm: boolean;
+    fist: boolean;
+  }): string | null {
+    // 按优先级顺序检查
+    if (gestures.pointing) return 'Pointing';
+    if (gestures.victory) return 'Victory';
+    if (gestures.ok) return 'OK';
+    if (gestures.thumbsUp) return 'Thumbs Up';
+    if (gestures.thumbsDown) return 'Thumbs Down';
+    if (gestures.callMe) return 'Call Me';
+    if (gestures.rockOn) return 'Rock On';
+    if (gestures.openPalm) return 'Open Palm';
+    if (gestures.fist) return 'Fist';
+    return null;
+  }
+
+  /**
    * 更新 canvas 以匹配视频显示区域
    */
   function updateCanvasToMatchVideo() {
@@ -121,6 +149,23 @@ export function useGestureTracking() {
         handActions.setHandActive(side, true);
         handActions.setHandLandmarks(side, landmarks);
 
+        // 检测手势状态 - 使用 try-catch 防止错误阻止绘制
+        try {
+          if (landmarks && landmarks.length > 0) {
+            const gestureResult = detectHandGestures(landmarks as Landmarks, side);
+            const primaryGesture = getPrimaryGesture(gestureResult.gestures);
+            handActions.setGesture(
+              side,
+              primaryGesture,
+              gestureResult.fingers,
+              gestureResult.palm.direction,
+              gestureResult.pinch.pinchingFinger
+            );
+          }
+        } catch (error) {
+          console.warn('[Gesture Detection] Error:', error);
+        }
+
         // 收集手部 landmarks 用于双手交互
         if (side === 'Left') {
           leftLandmarks = landmarks as Landmarks;
@@ -141,6 +186,7 @@ export function useGestureTracking() {
           handActions.setHandActive(side as 'Left' | 'Right', false);
           handActions.setTouching(side as 'Left' | 'Right', false);
           handActions.setPinching(side as 'Left' | 'Right', false, 0);
+          handActions.setGesture(side as 'Left' | 'Right', null);
         }
       });
 
@@ -252,58 +298,53 @@ export function useGestureTracking() {
       if (handStore.zoomMode.active) {
         handActions.setZoomMode(false);
       }
+      handActions.setPreviousHandsDistance(null);
       return;
     }
 
-    // 检测双手缩放手势
+    // 计算当前双手距离
+    const currentDistance = calculateDistance(
+      { x: leftLandmarks[9].x, y: leftLandmarks[9].y, z: 0 },
+      { x: rightLandmarks[9].x, y: rightLandmarks[9].y, z: 0 }
+    );
+
     const previousDistance = handStore.previousHandsDistance;
-    const zoomGesture = detectZoomGesture(leftLandmarks, rightLandmarks, previousDistance);
 
-    // 更新手部距离记录
-    if (zoomGesture.distance !== undefined) {
-      handActions.setPreviousHandsDistance(zoomGesture.distance);
+    if (!handStore.zoomMode.active) {
+      // 第一次检测到双手：记录初始距离和 spread
+      handActions.setZoomMode(true);
+      handActions.setZoomInitials(
+        particleStore.currentSpread,
+        currentDistance,
+        currentDistance
+      );
+      handActions.setPreviousHandsDistance(currentDistance);
+      return;
     }
 
-    // 如果检测到缩放手势
-    if (zoomGesture.isZoom && zoomGesture.direction) {
-      if (!handStore.zoomMode.active) {
-        // 开始缩放模式
-        handActions.setZoomMode(true);
-        handActions.setZoomInitials(
-          particleStore.currentSpread,
-          calculateDistance(
-            { x: leftLandmarks[9].x, y: leftLandmarks[9].y, z: 0 },
-            { x: rightLandmarks[9].x, y: rightLandmarks[9].y, z: 0 }
-          ),
-          calculateDistance(
-            { x: leftLandmarks[9].x, y: leftLandmarks[9].y, z: 0 },
-            { x: rightLandmarks[9].x, y: rightLandmarks[9].y, z: 0 }
-          )
-        );
-      }
+    // 检查双手是否在接近粒子球（可选：只有在球附近才能拉伸）
+    // 为了更好的用户体验，我们允许任何位置拉伸
 
-      // 计算缩放比例
-      const initialSpread = handStore.zoomMode.initialSpread;
-      const currentDistance = zoomGesture.distance || 1;
-      const initialDistance = handStore.zoomMode.leftInitialDist || currentDistance;
+    // 计算缩放比例
+    const initialSpread = handStore.zoomMode.initialSpread;
+    const initialDistance = handStore.zoomMode.leftInitialDist;
 
-      // 根据双手距离变化调整 spread
-      const scaleFactor = currentDistance / initialDistance;
-      const newSpread = Math.max(0.3, Math.min(5.0, initialSpread * scaleFactor));
+    // 根据双手距离变化调整 spread
+    const scaleFactor = currentDistance / initialDistance;
+    const newSpread = Math.max(0.3, Math.min(5.0, initialSpread * scaleFactor));
 
-      particleActions.setTargetSpread(newSpread);
-    } else {
-      // 没有缩放手势时，退出缩放模式
-      if (handStore.zoomMode.active) {
-        handActions.setZoomMode(false);
-      }
-    }
+    particleActions.setTargetSpread(newSpread);
+    handActions.setPreviousHandsDistance(currentDistance);
   }
 
   /**
    * 绘制手部
    */
   function drawHands(ctx: CanvasRenderingContext2D, results: any) {
+    if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+      return;
+    }
+
     const HAND_CONNECTIONS = [
       [0, 1], [1, 2], [2, 3], [3, 4],
       [0, 5], [5, 6], [6, 7], [7, 8],
@@ -358,9 +399,16 @@ export function useGestureTracking() {
     try {
       // 创建视频和画布元素
       videoElement = document.getElementById('webcam') as HTMLVideoElement;
-      canvasElement = document.createElement('canvas');
-      document.body.appendChild(canvasElement);
-      canvasElement.className = 'hand-overlay';
+
+      // 检查是否已存在 canvas，避免重复创建
+      const existingCanvas = document.querySelector('.hand-overlay');
+      if (existingCanvas) {
+        canvasElement = existingCanvas as HTMLCanvasElement;
+      } else {
+        canvasElement = document.createElement('canvas');
+        document.body.appendChild(canvasElement);
+        canvasElement.className = 'hand-overlay';
+      }
 
       // 初始化摄像头
       const stream = await navigator.mediaDevices.getUserMedia({

@@ -1,0 +1,181 @@
+/**
+ * Debug Panel 简单样式
+ */
+
+/* 切换按钮 */
+.debug-toggle {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  z-index: 1000;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.debug-toggle:hover {
+  background: rgba(0, 0, 0, 0.9);
+}
+
+.debug-toggle.active {
+  background: rgba(167, 139, 250, 0.4);
+  border-color: rgba(167, 139, 250, 0.6);
+}
+
+/* 调试面板容器 */
+.debug-panel {
+  position: fixed;
+  top: 50px;
+  right: 10px;
+  width: 320px;
+  max-height: calc(100vh - 70px);
+  background: rgba(0, 0, 0, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  overflow: hidden;
+  z-index: 999;
+  color: white;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+/* 头部 */
+.debug-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 15px;
+  background: rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.debug-header h2 {
+  margin: 0;
+  font-size: 14px;
+  color: #a78bfa;
+}
+
+.debug-close {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+}
+
+.debug-close:hover {
+  color: #ff6b6b;
+}
+
+/* 内容区域 */
+.debug-content {
+  padding: 10px 15px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+}
+
+/* 滚动条样式 */
+.debug-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.debug-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.debug-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.debug-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* 区块 */
+.debug-section {
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.debug-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.debug-section h3 {
+  margin: 0 0 8px 0;
+  font-size: 11px;
+  color: #a78bfa;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* 数据行 */
+.debug-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 0;
+}
+
+.debug-row > span:first-child {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.debug-value {
+  color: #4ade80;
+  font-weight: 500;
+}
+
+.debug-value.yes {
+  color: #4ade80;
+}
+
+.debug-value.no {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* 手部信息 */
+.hand-info {
+  padding-left: 10px;
+}
+
+/* 手势名称 - 高亮显示 */
+.gesture-name {
+  font-weight: 600;
+  text-transform: capitalize;
+  color: #fbbf24;
+}
+
+/* 手指状态显示 */
+.finger-states {
+  font-family: monospace;
+  letter-spacing: 1px;
+}
+
+.finger-states span {
+  color: rgba(255, 255, 255, 0.3);
+  font-weight: 600;
+}
+
+.finger-states span.active {
+  color: #4ade80;
+  text-shadow: 0 0 4px rgba(74, 222, 128, 0.4);
+}
+
+/* 手掌方向 */
+.palm-dir {
+  text-transform: capitalize;
+  color: #60a5fa;
+}

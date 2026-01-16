@@ -6,10 +6,20 @@ import { createStore, produce, reconcile } from 'solid-js/store';
 import type { HandState, HandSide, Vector3D, Landmarks } from '@/core/types';
 
 /**
- * 扩展的手部状态 - 包含拖拽偏移
+ * 扩展的手部状态 - 包含拖拽偏移和手势
  */
 export type ExtendedHandState = HandState & {
   dragOffset?: Vector3D;
+  currentGesture: string | null;
+  fingersExtended?: {
+    thumb: boolean;
+    index: boolean;
+    middle: boolean;
+    ring: boolean;
+    pinky: boolean;
+  };
+  palmDirection?: 'up' | 'down' | 'left' | 'right' | 'camera' | 'away';
+  pinchingFinger?: 'index' | 'middle' | 'ring' | 'pinky' | null;
 };
 
 function createInitialHandState(side: HandSide): ExtendedHandState {
@@ -21,6 +31,16 @@ function createInitialHandState(side: HandSide): ExtendedHandState {
     isSelected: false,
     isPinching: false,
     pinchDistance: 0,
+    currentGesture: null,
+    fingersExtended: {
+      thumb: false,
+      index: false,
+      middle: false,
+      ring: false,
+      pinky: false,
+    },
+    palmDirection: undefined,
+    pinchingFinger: null,
   };
 }
 
@@ -68,7 +88,7 @@ export const handActions = {
 
   setHandLandmarks(side: HandSide, landmarks: Landmarks | null) {
     const key = sideToKey(side);
-    setHandStore(key, 'landmarks', landmarks);
+    setHandStore(key, 'landmarks', landmarks ? reconcile(landmarks) : null);
   },
 
   setTouching(side: HandSide, touching: boolean) {
@@ -115,5 +135,27 @@ export const handActions = {
 
   setPreviousHandsDistance(distance: number | null) {
     setHandStore('previousHandsDistance', distance);
+  },
+
+  setGesture(
+    side: HandSide,
+    gesture: string | null,
+    fingers?: { thumb: boolean; index: boolean; middle: boolean; ring: boolean; pinky: boolean },
+    palmDirection?: 'up' | 'down' | 'left' | 'right' | 'camera' | 'away',
+    pinchingFinger?: 'index' | 'middle' | 'ring' | 'pinky' | null
+  ) {
+    const key = sideToKey(side);
+    setHandStore(key, produce((hand) => {
+      hand.currentGesture = gesture;
+      if (fingers) {
+        hand.fingersExtended = fingers;
+      }
+      if (palmDirection) {
+        hand.palmDirection = palmDirection;
+      }
+      if (pinchingFinger !== undefined) {
+        hand.pinchingFinger = pinchingFinger;
+      }
+    }));
   },
 };
