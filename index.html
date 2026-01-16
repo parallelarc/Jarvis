@@ -1,83 +1,70 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hand Tracking Demo with Three.js</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            width: 100vw;
-            height: 100vh;
-            overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background-color: #000;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Javis - Hand Gesture Particle System</title>
 
-        .container {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-        }
+  <!-- MediaPipe Libraries -->
+  <script src="./models/libs/hands.js" async></script>
+  <script src="./models/libs/drawing_utils.js" async></script>
+  <script src="./models/libs/camera_utils.js" async></script>
 
-        #webcam {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transform: scaleX(-1);
-        }
+  <!-- Three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 
-        #canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            transform: scaleX(-1);
-            pointer-events: none;
-        }
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-        #three-canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            transform: scaleX(-1);
-            pointer-events: none;
-            z-index: 5;
-        }
+    body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: #000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
 
-        #status {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            color: #fff;
-            background-color: rgba(0, 0, 0, 0.5);
-            padding: 10px;
-            border-radius: 5px;
-            font-family: Arial, sans-serif;
-            z-index: 10;
-        }
-    </style>
+    #app {
+      width: 100%;
+      height: 100%;
+    }
+
+    #webcam {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      transform: scaleX(-1);
+      z-index: 1;
+    }
+
+    .hand-overlay {
+      position: absolute;
+      pointer-events: none;
+      z-index: 10;
+      transform: scaleX(-1);
+    }
+
+    .particle-scene {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 5;
+      pointer-events: none;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <video id="webcam" autoplay playsinline></video>
-        <canvas id="canvas"></canvas>
-        <div id="three-canvas"></div>
-        <div id="status">Loading MediaPipe...</div>
-    </div>
-
-    <script src="./models/libs/hands.js"></script>
-    <script src="./models/libs/drawing_utils.js"></script>
-    <script src="./models/libs/camera_utils.js"></script>
-    <script src="./models/libs/three.min.js"></script>
-    <script type="module" src="./js/main.js"></script>
+  <video id="webcam" autoplay playsinline></video>
+  <div id="app"></div>
+  <script src="/src/main.tsx" type="module"></script>
 </body>
 </html>
