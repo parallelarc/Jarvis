@@ -41,33 +41,16 @@ export function useGestureTracking() {
   let videoElement: HTMLVideoElement | null = null;
 
   /**
-   * 计算 object-fit: contain 下的实际视频显示区域
+   * 获取显示区域
+   * 当使用静态背景时，直接返回窗口尺寸
    */
   function getVideoDisplayArea() {
-    if (!videoElement || !videoElement.videoWidth) {
-      return { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
-    }
-
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const videoRatio = videoElement.videoWidth / videoElement.videoHeight;
-    const windowRatio = vw / vh;
-
-    let width: number, height: number, left: number, top: number;
-
-    if (videoRatio > windowRatio) {
-      width = vw;
-      height = vw / videoRatio;
-      left = 0;
-      top = (vh - height) / 2;
-    } else {
-      height = vh;
-      width = vh * videoRatio;
-      left = (vw - width) / 2;
-      top = 0;
-    }
-
-    return { left, top, width, height };
+    return {
+      left: 0,
+      top: 0,
+      width: window.innerWidth,
+      height: window.innerHeight
+    };
   }
 
   /**
