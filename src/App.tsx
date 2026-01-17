@@ -2,7 +2,7 @@
  * 主应用组件
  */
 
-import { ParticleScene } from '@/components/ParticleScene';
+import { SVGScene } from '@/components/SVGScene';
 import { DebugPanel } from '@/components/DebugPanel';
 import { useGestureTracking } from '@/hooks/useGestureTracking';
 import './App.css';
@@ -21,8 +21,8 @@ export default function App() {
         </div>
       )}
 
-      {/* 粒子场景 */}
-      <ParticleScene />
+      {/* SVG 场景 */}
+      <SVGScene />
 
       {/* 调试面板 */}
       <DebugPanel />

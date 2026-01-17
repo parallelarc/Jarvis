@@ -242,13 +242,22 @@ export function isPinkyExtended(landmarks: Landmarks): boolean {
  * 获取所有手指的伸直状态
  */
 export function getAllFingersExtended(landmarks: Landmarks): FingersExtended {
+  const thumb = isThumbExtended(landmarks);
+  const index = isIndexExtended(landmarks);
+  const middle = isMiddleExtended(landmarks);
+  const ring = isRingExtended(landmarks);
+  const pinky = isPinkyExtended(landmarks);
+
+  // 计算伸直的手指数量 (避免循环依赖)
+  const extendedCount = [thumb, index, middle, ring, pinky].filter(v => v).length;
+
   return {
-    thumb: isThumbExtended(landmarks),
-    index: isIndexExtended(landmarks),
-    middle: isMiddleExtended(landmarks),
-    ring: isRingExtended(landmarks),
-    pinky: isPinkyExtended(landmarks),
-    extendedCount: countExtendedFingers(landmarks),
+    thumb,
+    index,
+    middle,
+    ring,
+    pinky,
+    extendedCount,
   };
 }
 
@@ -256,8 +265,7 @@ export function getAllFingersExtended(landmarks: Landmarks): FingersExtended {
  * 计算伸直的手指数量
  */
 export function countExtendedFingers(landmarks: Landmarks): number {
-  const fingers = getAllFingersExtended(landmarks);
-  return Object.values(fingers).filter(v => v).length;
+  return getAllFingersExtended(landmarks).extendedCount;
 }
 
 // ========== 捏合状态检测 ==========

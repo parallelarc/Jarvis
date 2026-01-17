@@ -1,15 +1,15 @@
 /**
  * 手势追踪 Hook
- * 管理 MediaPipe Hands 和相机输入
+ * 管理 MediaPipe Hands 和相机输入，以及 SVG 对象交互
  */
 
 import { createSignal, onMount, onCleanup } from 'solid-js';
 import { handStore, handActions } from '@/stores/handStore';
-import { animationActions, animationSelectors } from '@/stores/animationStore';
-import { particleActions, particleStore } from '@/stores/particleStore';
+import { animationActions } from '@/stores/animationStore';
+import { objectStore, objectActions } from '@/stores/objectStore';
 import { GESTURE_CONFIG } from '@/config';
-import { normalizedToWorld, calculateDistance } from '@/utils/math';
 import { detectHandGestures } from '@/domain/GestureDetector';
+import { normalizedToWorld, calculateDistance } from '@/utils/math';
 import type { Landmarks } from '@/core/types';
 
 // MediaPipe 类型声明
@@ -56,13 +56,11 @@ export function useGestureTracking() {
     let width: number, height: number, left: number, top: number;
 
     if (videoRatio > windowRatio) {
-      // 视频更宽，以宽度为准
       width = vw;
       height = vw / videoRatio;
       left = 0;
       top = (vh - height) / 2;
     } else {
-      // 视频更高，以高度为准
       height = vh;
       width = vh * videoRatio;
       left = (vw - width) / 2;
@@ -74,7 +72,6 @@ export function useGestureTracking() {
 
   /**
    * 根据优先级获取主手势名称
-   * 防止 UI 闪烁：当多个手势同时为 true 时，按优先级返回
    */
   function getPrimaryGesture(gestures: {
     pointing: boolean;
@@ -87,7 +84,6 @@ export function useGestureTracking() {
     openPalm: boolean;
     fist: boolean;
   }): string | null {
-    // 按优先级顺序检查
     if (gestures.pointing) return 'Pointing';
     if (gestures.victory) return 'Victory';
     if (gestures.ok) return 'OK';
@@ -101,6 +97,21 @@ export function useGestureTracking() {
   }
 
   /**
+   * 检查点是否接近对象（基于位置距离）
+   */
+  function isPointNearObject(
+    point: { x: number; y: number },
+    objectPosition: { x: number; y: number; z?: number },
+    threshold: number = 1.5
+  ): boolean {
+    const worldPos = normalizedToWorld({ x: point.x, y: point.y });
+    const dx = worldPos.x - objectPosition.x;
+    const dy = worldPos.y - objectPosition.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    return distance < threshold;
+  }
+
+  /**
    * 更新 canvas 以匹配视频显示区域
    */
   function updateCanvasToMatchVideo() {
@@ -108,11 +119,9 @@ export function useGestureTracking() {
 
     const area = getVideoDisplayArea();
 
-    // 设置 canvas 内部尺寸
     canvasElement.width = area.width;
     canvasElement.height = area.height;
 
-    // 设置 canvas 显示位置和尺寸
     canvasElement.style.left = `${area.left}px`;
     canvasElement.style.top = `${area.top}px`;
     canvasElement.style.width = `${area.width}px`;
@@ -123,10 +132,8 @@ export function useGestureTracking() {
    * 处理 MediaPipe 结果
    */
   function onResults(results: any) {
-    // 确保画布与视频区域匹配
     updateCanvasToMatchVideo();
 
-    // 清除画布
     const ctx = canvasElement?.getContext('2d');
     if (ctx && canvasElement) {
       ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
@@ -135,7 +142,6 @@ export function useGestureTracking() {
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
       setStatus(`${results.multiHandLandmarks.length} hand(s) detected`);
 
-      // 获取当前检测到的手部
       const detectedSides = new Set<'Left' | 'Right'>();
       let leftLandmarks: Landmarks | null = null;
       let rightLandmarks: Landmarks | null = null;
@@ -149,7 +155,7 @@ export function useGestureTracking() {
         handActions.setHandActive(side, true);
         handActions.setHandLandmarks(side, landmarks);
 
-        // 检测手势状态 - 使用 try-catch 防止错误阻止绘制
+        // 检测手势状态
         try {
           if (landmarks && landmarks.length > 0) {
             const gestureResult = detectHandGestures(landmarks as Landmarks, side);
@@ -166,21 +172,26 @@ export function useGestureTracking() {
           console.warn('[Gesture Detection] Error:', error);
         }
 
-        // 收集手部 landmarks 用于双手交互
+        // 收集手部 landmarks 用于交互
         if (side === 'Left') {
           leftLandmarks = landmarks as Landmarks;
         } else {
           rightLandmarks = landmarks as Landmarks;
         }
 
-        // 处理交互（拖拽、缩放）
-        processHandInteractions(landmarks, side, results);
+        // 处理触摸检测
+        processTouchDetection(landmarks, side);
+
+        // 处理拖拽交互（仅右手）
+        if (side === 'Right') {
+          processDragInteraction(landmarks, side);
+        }
       }
 
-      // 处理双手拉伸交互
-      processTwoHandInteraction(leftLandmarks, rightLandmarks);
+      // 处理双手缩放交互
+      processScaleInteraction(leftLandmarks, rightLandmarks);
 
-      // 清理未检测到的手部状态（但保留拖拽/选中状态，因为它们可能暂时丢失）
+      // 清理未检测到的手部状态
       ['Left', 'Right'].forEach((side) => {
         if (!detectedSides.has(side as 'Left' | 'Right')) {
           handActions.setHandActive(side as 'Left' | 'Right', false);
@@ -196,125 +207,171 @@ export function useGestureTracking() {
       }
     } else {
       setStatus('No hands detected');
-      // 没有手部时才重置所有状态
       handActions.resetHands();
+      // 重置选中状态
+      objectActions.selectObject(null);
     }
   }
 
   /**
-   * 处理手部交互
+   * 处理触摸检测
    */
-  function processHandInteractions(landmarks: Array<{ x: number; y: number; z: number }>, side: 'Left' | 'Right', results: any) {
+  function processTouchDetection(
+    landmarks: Array<{ x: number; y: number; z: number }>,
+    side: 'Left' | 'Right'
+  ) {
+    const indexTip = landmarks[8];
+    let isTouching = false;
+
+    for (const [id, objState] of Object.entries(objectStore.objects)) {
+      if (isPointNearObject(indexTip, objState.position)) {
+        isTouching = true;
+        break;
+      }
+    }
+
+    handActions.setTouching(side, isTouching);
+  }
+
+  /**
+   * 处理拖拽交互
+   */
+  function processDragInteraction(
+    landmarks: Array<{ x: number; y: number; z: number }>,
+    side: 'Left' | 'Right'
+  ) {
     const thumbTip = landmarks[4];
     const indexTip = landmarks[8];
-    const spherePos = particleStore.spherePosition;
-    const currentSpread = particleStore.currentSpread;
-
-    // 检查是否接近粒子
-    const thumbNear = isPointNearParticlesFromObject(thumbTip, spherePos, currentSpread);
-    const indexNear = isPointNearParticlesFromObject(indexTip, spherePos, currentSpread);
-    const bothTouching = thumbNear && indexNear;
 
     const pinchDistance = calculateDistance(
       { x: thumbTip.x, y: thumbTip.y, z: thumbTip.z },
       { x: indexTip.x, y: indexTip.y, z: indexTip.z }
     );
 
-    handActions.setTouching(side, bothTouching);
     handActions.setPinching(side, pinchDistance < GESTURE_CONFIG.PINCH_THRESHOLD, pinchDistance);
 
-    // 拖拽逻辑
-    if (side === 'Right') {
-      handleDragInteraction(landmarks, bothTouching, pinchDistance, spherePos, currentSpread);
-    }
-  }
+    const handState = side === 'Left' ? handStore.left : handStore.right;
+    const selectedId = objectStore.selectedObjectId;
 
-  /**
-   * 检查点是否接近粒子 (对象版本)
-   */
-  function isPointNearParticlesFromObject(point: { x: number; y: number }, spherePos: { x: number; y: number; z?: number }, spread: number): boolean {
-    const worldPos = normalizedToWorld({ x: point.x, y: point.y });
-    const dx = worldPos.x - spherePos.x;
-    const dy = worldPos.y - spherePos.y;
-    const dz = -(spherePos.z ?? 0);
-    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    return distance < 2.0 * spread;
-  }
+    // 缩放模式下禁用拖拽
+    if (handStore.zoomMode.active) return;
 
-  /**
-   * 检查点是否接近粒子
-   */
-  function isPointNearParticles(point: number[], spherePos: { x: number; y: number; z?: number }, spread: number): boolean {
-    const worldPos = normalizedToWorld({ x: point[0], y: point[1] });
-    const dx = worldPos.x - spherePos.x;
-    const dy = worldPos.y - spherePos.y;
-    const dz = -(spherePos.z ?? 0);
-    const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-    return distance < 2.0 * spread;
-  }
-
-  /**
-   * 处理拖拽交互
-   */
-  function handleDragInteraction(
-    landmarks: Array<{ x: number; y: number; z: number }>,
-    bothTouching: boolean,
-    pinchDistance: number,
-    spherePos: { x: number; y: number; z?: number },
-    currentSpread: number
-  ) {
-    const handState = handStore.right;
-
-    if (handState.isSelected) {
-      if (pinchDistance < GESTURE_CONFIG.PINCH_THRESHOLD) {
-        const handWorldPos = normalizedToWorld({ x: landmarks[8].x, y: landmarks[8].y });
-        particleActions.updateSpherePosition({
+    if (selectedId) {
+      // 已选中对象，继续拖拽
+      if (handState.isSelected && pinchDistance < GESTURE_CONFIG.PINCH_THRESHOLD) {
+        const handWorldPos = normalizedToWorld({ x: indexTip.x, y: indexTip.y });
+        const newPosition = {
           x: handWorldPos.x - (handState.dragOffset?.x || 0),
           y: handWorldPos.y - (handState.dragOffset?.y || 0),
-        });
+        };
+        objectActions.updateObjectPosition(selectedId, newPosition);
+
+        // 同步更新 Three.js 对象
+        const sceneAPI = (window as any).svgSceneAPI;
+        if (sceneAPI) {
+          const svgObjects = sceneAPI.getSVGObjects();
+          const svgObj = svgObjects?.get(selectedId);
+          if (svgObj) {
+            svgObj.updatePosition({ x: newPosition.x, y: newPosition.y, z: 0 });
+          }
+        }
       } else {
-        handActions.setSelected('Right', false);
+        // 释放选中
+        handActions.setSelected(side, false);
+        objectActions.selectObject(null);
+
+        // 取消对象高亮
+        const sceneAPI = (window as any).svgSceneAPI;
+        if (sceneAPI) {
+          const svgObjects = sceneAPI.getSVGObjects();
+          svgObjects?.forEach(obj => obj.setSelected(false));
+        }
       }
-    } else if (bothTouching && pinchDistance < GESTURE_CONFIG.PINCH_THRESHOLD) {
-      handActions.setSelected('Right', true);
-      const handWorldPos = normalizedToWorld({ x: landmarks[8].x, y: landmarks[8].y });
-      handActions.setDragOffset('Right', {
-        x: handWorldPos.x - spherePos.x,
-        y: handWorldPos.y - spherePos.y,
-        z: 0,
-      });
+    } else {
+      // 尝试选中对象
+      if (pinchDistance < GESTURE_CONFIG.PINCH_THRESHOLD) {
+        let closestId: string | null = null;
+        let closestDist = Infinity;
+
+        for (const [id, objState] of Object.entries(objectStore.objects)) {
+          if (isPointNearObject(indexTip, objState.position)) {
+            const handWorldPos = normalizedToWorld({ x: indexTip.x, y: indexTip.y });
+            const dist = Math.sqrt(
+              Math.pow(handWorldPos.x - objState.position.x, 2) +
+              Math.pow(handWorldPos.y - objState.position.y, 2)
+            );
+            if (dist < closestDist) {
+              closestDist = dist;
+              closestId = id;
+            }
+          }
+        }
+
+        if (closestId && closestDist < 1.5) {
+          handActions.setSelected(side, true);
+          objectActions.selectObject(closestId);
+
+          const handWorldPos = normalizedToWorld({ x: indexTip.x, y: indexTip.y });
+          const objState = objectStore.objects[closestId];
+          handActions.setDragOffset(side, {
+            x: handWorldPos.x - objState.position.x,
+            y: handWorldPos.y - objState.position.y,
+            z: 0,
+          });
+
+          // 高亮选中对象
+          const sceneAPI = (window as any).svgSceneAPI;
+          if (sceneAPI) {
+            const svgObjects = sceneAPI.getSVGObjects();
+            const svgObj = svgObjects?.get(closestId);
+            if (svgObj) {
+              svgObj.setSelected(true);
+            }
+          }
+        }
+      }
     }
   }
 
   /**
-   * 处理双手拉伸交互
+   * 处理双手缩放交互
    */
-  function processTwoHandInteraction(
+  function processScaleInteraction(
     leftLandmarks: Landmarks | null,
     rightLandmarks: Landmarks | null
   ) {
     if (!leftLandmarks || !rightLandmarks) {
-      // 重置缩放模式
       if (handStore.zoomMode.active) {
         handActions.setZoomMode(false);
+        handActions.setPreviousHandsDistance(null);
       }
-      handActions.setPreviousHandsDistance(null);
       return;
     }
 
-    // 计算当前双手距离
+    const selectedId = objectStore.selectedObjectId;
+    if (!selectedId) return;
+
+    const leftPinching = handStore.left.isPinching;
+    const rightPinching = handStore.right.isPinching;
+
+    if (!leftPinching || !rightPinching) {
+      if (handStore.zoomMode.active) {
+        handActions.setZoomMode(false);
+        handActions.setPreviousHandsDistance(null);
+      }
+      return;
+    }
+
     const currentDistance = calculateDistance(
       { x: leftLandmarks[9].x, y: leftLandmarks[9].y, z: 0 },
       { x: rightLandmarks[9].x, y: rightLandmarks[9].y, z: 0 }
     );
 
-    const previousDistance = handStore.previousHandsDistance;
-
     if (!handStore.zoomMode.active) {
-      // 第一次检测到双手：记录初始距离和 spread
+      const objState = objectStore.objects[selectedId];
       handActions.setZoomMode(true);
       handActions.setZoomInitials(
-        particleStore.currentSpread,
+        objState.scale,
         currentDistance,
         currentDistance
       );
@@ -322,18 +379,23 @@ export function useGestureTracking() {
       return;
     }
 
-    // 检查双手是否在接近粒子球（可选：只有在球附近才能拉伸）
-    // 为了更好的用户体验，我们允许任何位置拉伸
-
-    // 计算缩放比例
-    const initialSpread = handStore.zoomMode.initialSpread;
+    const initialScale = handStore.zoomMode.initialSpread;
     const initialDistance = handStore.zoomMode.leftInitialDist;
-
-    // 根据双手距离变化调整 spread
     const scaleFactor = currentDistance / initialDistance;
-    const newSpread = Math.max(0.3, Math.min(5.0, initialSpread * scaleFactor));
+    const newScale = Math.max(0.2, Math.min(5.0, initialScale * scaleFactor));
 
-    particleActions.setTargetSpread(newSpread);
+    objectActions.updateObjectScale(selectedId, newScale);
+
+    // 同步更新 Three.js 对象
+    const sceneAPI = (window as any).svgSceneAPI;
+    if (sceneAPI) {
+      const svgObjects = sceneAPI.getSVGObjects();
+      const svgObj = svgObjects?.get(selectedId);
+      if (svgObj) {
+        svgObj.setScale(newScale);
+      }
+    }
+
     handActions.setPreviousHandsDistance(currentDistance);
   }
 
@@ -358,9 +420,7 @@ export function useGestureTracking() {
     const width = canvas.width;
     const height = canvas.height;
 
-    // MediaPipe landmarks 是对象数组 {x, y, z}
     for (const landmarks of results.multiHandLandmarks) {
-      // 为每只手单独绘制，避免连接线串联
       ctx.strokeStyle = '#a855f7';
       ctx.lineWidth = 2;
 
@@ -397,10 +457,8 @@ export function useGestureTracking() {
    */
   async function initMediaPipe() {
     try {
-      // 创建视频和画布元素
       videoElement = document.getElementById('webcam') as HTMLVideoElement;
 
-      // 检查是否已存在 canvas，避免重复创建
       const existingCanvas = document.querySelector('.hand-overlay');
       if (existingCanvas) {
         canvasElement = existingCanvas as HTMLCanvasElement;
@@ -410,7 +468,6 @@ export function useGestureTracking() {
         canvasElement.className = 'hand-overlay';
       }
 
-      // 初始化摄像头
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 1920 },
@@ -423,11 +480,9 @@ export function useGestureTracking() {
         await new Promise(resolve => {
           videoElement!.onloadedmetadata = resolve;
         });
-        // 视频元数据加载完成后，更新 canvas 以匹配视频显示区域
         updateCanvasToMatchVideo();
       }
 
-      // 初始化 MediaPipe Hands
       if (typeof window.Hands !== 'undefined') {
         hands = new window.Hands({
           locateFile: (file: string) => {
@@ -458,7 +513,6 @@ export function useGestureTracking() {
         await hands.initialize();
         hands.onResults(onResults);
 
-        // 启动相机
         if (typeof window.Camera !== 'undefined') {
           camera = new window.Camera(videoElement, {
             onFrame: async () => {
@@ -484,7 +538,6 @@ export function useGestureTracking() {
    * 挂载时初始化
    */
   onMount(() => {
-    // 等待外部脚本加载
     const checkLibs = () => {
       if (typeof window.Hands !== 'undefined' && typeof window.Camera !== 'undefined') {
         initMediaPipe();
@@ -494,11 +547,9 @@ export function useGestureTracking() {
     };
     checkLibs();
 
-    // 监听窗口大小变化
     window.addEventListener('resize', handleResize);
 
     return () => {
-      // 清理
       window.removeEventListener('resize', handleResize);
       if (camera) {
         camera.stop();

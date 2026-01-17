@@ -4,7 +4,7 @@
 
 import { createSignal, createMemo, Show, For } from 'solid-js';
 import { handStore } from '@/stores/handStore';
-import { particleStore } from '@/stores/particleStore';
+import { objectStore, objectActions } from '@/stores/objectStore';
 import { animationStore } from '@/stores/animationStore';
 import './DebugPanel.css';
 
@@ -17,10 +17,15 @@ export function toggleDebugPanel() {
 
 export function DebugPanel() {
   // 直接从 store 读取数据 - 使用 createMemo 确保响应式
+  // 只订阅具体字段，避免整个 store 变化触发重新计算
   const leftHand = createMemo(() => handStore.left);
   const rightHand = createMemo(() => handStore.right);
   const zoomMode = createMemo(() => handStore.zoomMode);
-  const particles = createMemo(() => particleStore);
+
+  // 分别订阅对象状态的各个字段
+  const selectedObjectId = createMemo(() => objectStore.selectedObjectId);
+  const objects = createMemo(() => objectStore.objects);
+
   const animation = createMemo(() => animationStore);
 
   // 计算双手距离
@@ -146,37 +151,36 @@ export function DebugPanel() {
               </Show>
             </div>
 
-            {/* 粒子状态 */}
+            {/* SVG 对象状态 */}
             <div class="debug-section">
-              <h3>Particles</h3>
+              <h3>SVG Objects</h3>
               <div class="debug-row">
-                <span>Position:</span>
+                <span>Selected:</span>
                 <span class="debug-value">
-                  ({particles().spherePosition.x.toFixed(2)},{' '}
-                  {particles().spherePosition.y.toFixed(2)},{' '}
-                  {(particles().spherePosition.z ?? 0).toFixed(2)})
+                  {selectedObjectId() || 'None'}
                 </span>
               </div>
-              <div class="debug-row">
-                <span>Spread:</span>
-                <span class="debug-value">{particles().currentSpread.toFixed(2)}</span>
+              <div class="debug-objects-list">
+                <For each={Object.entries(objects())}>
+                  {([id, obj]) => (
+                    <div class="debug-object-item" classList={{ selected: obj.selected }}>
+                      <span class="debug-object-id">{id}</span>
+                      <span class="debug-object-pos">
+                        ({obj.position.x.toFixed(1)}, {obj.position.y.toFixed(1)})
+                      </span>
+                      <span class="debug-object-scale">
+                        {obj.scale.toFixed(2)}x
+                      </span>
+                    </div>
+                  )}
+                </For>
               </div>
-              <div class="debug-row">
-                <span>Target Spread:</span>
-                <span class="debug-value">{particles().targetSpread.toFixed(2)}</span>
-              </div>
-              <div class="debug-row">
-                <span>Color:</span>
-                <span class="debug-value">
-                  rgb({Math.round(particles().baseColor.r * 255)},{' '}
-                  {Math.round(particles().baseColor.g * 255)},{' '}
-                  {Math.round(particles().baseColor.b * 255)})
-                </span>
-              </div>
-              <div class="debug-row">
-                <span>Ripples:</span>
-                <span class="debug-value">{particles().ripples.length}</span>
-              </div>
+              <button
+                class="debug-reset-btn"
+                onClick={() => objectActions.resetAllObjects()}
+              >
+                Reset All
+              </button>
             </div>
 
             {/* 动画状态 */}
