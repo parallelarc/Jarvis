@@ -73,8 +73,15 @@ export function HandOverlay() {
    */
   function handleResize() {
     if (!canvasRef) return;
-    canvasRef.width = window.innerWidth;
-    canvasRef.height = window.innerHeight;
+    const dpr = Math.min(window.devicePixelRatio, 2);
+    canvasRef.width = window.innerWidth * dpr;
+    canvasRef.height = window.innerHeight * dpr;
+    canvasRef.style.width = window.innerWidth + 'px';
+    canvasRef.style.height = window.innerHeight + 'px';
+    const ctx = canvasRef.getContext('2d');
+    if (ctx) {
+      ctx.scale(dpr, dpr);
+    }
   }
 
   /**

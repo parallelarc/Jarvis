@@ -56,6 +56,8 @@ export class SVGRegistry {
           const texture = new (window.THREE as any).Texture(img);
           texture.needsUpdate = true;
           texture.colorSpace = (window.THREE as any).SRGBColorSpace;
+          texture.minFilter = (window.THREE as any).LinearFilter;
+          texture.magFilter = (window.THREE as any).LinearFilter;
           this.textures.set(asset.id, texture);
           resolve(texture);
         };
