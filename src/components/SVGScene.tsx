@@ -93,6 +93,7 @@ export function SVGScene() {
         svgObjects.set(id, svgObj);
         scene.add(svgObj.mesh);
         scene.add(svgObj.hitPlane);
+        scene.add(svgObj.outlineMesh);
 
         // 收集初始位置用于 store 更新
         initialPositions[id] = { x: position.x, y: position.y, z: position.z };
@@ -127,6 +128,7 @@ export function SVGScene() {
             const floatOffset = Math.sin(time * 2 + getPositionIndex(id) * 0.5) * 0.05;
             obj.mesh.position.z = floatOffset;
             obj.hitPlane.position.z = floatOffset;
+            obj.outlineMesh.position.z = floatOffset;
           }
         });
       });

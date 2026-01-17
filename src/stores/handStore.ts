@@ -10,6 +10,7 @@ import type { HandState, HandSide, Vector3D, Landmarks } from '@/core/types';
  */
 export type ExtendedHandState = HandState & {
   dragOffset?: Vector3D;
+  isDragging: boolean;
   currentGesture: string | null;
   fingersExtended?: {
     thumb: boolean;
@@ -20,6 +21,10 @@ export type ExtendedHandState = HandState & {
   };
   palmDirection?: 'up' | 'down' | 'left' | 'right' | 'camera' | 'away';
   pinchingFinger?: 'index' | 'middle' | 'ring' | 'pinky' | null;
+  // 点击检测状态
+  pinchStartObjectId: string | null;  // 捏合开始时手指下的对象 ID
+  pinchStartTime: number;             // 捏合开始的时间戳（用于判断点击是否"干脆"）
+  wasPinching: boolean;               // 上一帧的捏合状态（用于检测边沿）
 };
 
 function createInitialHandState(side: HandSide): ExtendedHandState {
@@ -30,6 +35,7 @@ function createInitialHandState(side: HandSide): ExtendedHandState {
     isTouching: false,
     isSelected: false,
     isPinching: false,
+    isDragging: false,
     pinchDistance: 0,
     currentGesture: null,
     fingersExtended: {
@@ -41,6 +47,10 @@ function createInitialHandState(side: HandSide): ExtendedHandState {
     },
     palmDirection: undefined,
     pinchingFinger: null,
+    // 点击检测状态初始值
+    pinchStartObjectId: null,
+    pinchStartTime: 0,
+    wasPinching: false,
   };
 }
 
@@ -112,6 +122,11 @@ export const handActions = {
     setHandStore(key, 'dragOffset', offset);
   },
 
+  setDragging(side: HandSide, dragging: boolean) {
+    const key = sideToKey(side);
+    setHandStore(key, 'isDragging', dragging);
+  },
+
   resetHands() {
     setHandStore(reconcile({
       left: createInitialHandState('Left'),
@@ -157,5 +172,21 @@ export const handActions = {
         hand.pinchingFinger = pinchingFinger;
       }
     }));
+  },
+
+  // 点击检测相关动作
+  setPinchStartObject(side: HandSide, objectId: string | null) {
+    const key = sideToKey(side);
+    setHandStore(key, 'pinchStartObjectId', objectId);
+  },
+
+  setPinchStartTime(side: HandSide, time: number) {
+    const key = sideToKey(side);
+    setHandStore(key, 'pinchStartTime', time);
+  },
+
+  setWasPinching(side: HandSide, wasPinching: boolean) {
+    const key = sideToKey(side);
+    setHandStore(key, 'wasPinching', wasPinching);
   },
 };

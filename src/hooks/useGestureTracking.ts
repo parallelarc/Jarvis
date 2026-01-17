@@ -181,6 +181,9 @@ export function useGestureTracking() {
           handActions.setTouching(side as 'Left' | 'Right', false);
           handActions.setPinching(side as 'Left' | 'Right', false, 0);
           handActions.setGesture(side as 'Left' | 'Right', null);
+          // 重置点击检测状态
+          handActions.setWasPinching(side as 'Left' | 'Right', false);
+          handActions.setPinchStartObject(side as 'Left' | 'Right', null);
         }
       });
 
@@ -191,8 +194,8 @@ export function useGestureTracking() {
     } else {
       setStatus('No hands detected');
       handActions.resetHands();
-      // 重置选中状态
-      objectActions.selectObject(null);
+      // 重置选中状态并隐藏所有轮廓
+      deselectAll();
     }
   }
 
@@ -217,103 +220,187 @@ export function useGestureTracking() {
   }
 
   /**
-   * 处理拖拽交互
+   * 查找手指下的对象
+   */
+  function findObjectUnderFinger(
+    indexTip: { x: number; y: number }
+  ): string | null {
+    let closestId: string | null = null;
+    let closestDist = Infinity;
+
+    for (const [id, objState] of Object.entries(objectStore.objects)) {
+      if (isPointNearObject(indexTip, objState.position)) {
+        const handWorldPos = normalizedToWorld({ x: indexTip.x, y: indexTip.y });
+        const dist = Math.sqrt(
+          Math.pow(handWorldPos.x - objState.position.x, 2) +
+            Math.pow(handWorldPos.y - objState.position.y, 2)
+        );
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestId = id;
+        }
+      }
+    }
+
+    return closestDist < 1.5 ? closestId : null;
+  }
+
+  /**
+   * 处理拖拽交互 - 点击选中 + 捏合拖拽
+   *
+   * 点击 = 捏合开始（手指合起）+ 捏合结束（手指分开）的完整动作
+   * 点击必须在 1 秒内完成才算"干脆的点击"
    */
   function processDragInteraction(
     landmarks: Array<{ x: number; y: number; z: number }>,
     side: 'Left' | 'Right'
   ) {
+    // 点击时间限制配置
+    const CLICK_TIMEOUT = 1000; // 1秒内完成才算"干脆的点击"
+
     const thumbTip = landmarks[4];
     const indexTip = landmarks[8];
-
     const pinchDistance = calculateDistance(
       { x: thumbTip.x, y: thumbTip.y, z: thumbTip.z },
       { x: indexTip.x, y: indexTip.y, z: indexTip.z }
     );
-
-    handActions.setPinching(side, pinchDistance < GESTURE_CONFIG.PINCH_THRESHOLD, pinchDistance);
+    const isPinching = pinchDistance < GESTURE_CONFIG.PINCH_THRESHOLD;
 
     const handState = side === 'Left' ? handStore.left : handStore.right;
-    const selectedId = objectStore.selectedObjectId;
+    const currentSelectedId = objectStore.selectedObjectId;
 
     // 缩放模式下禁用拖拽
     if (handStore.zoomMode.active) return;
 
-    if (selectedId) {
-      // 已选中对象，继续拖拽
-      if (handState.isSelected && pinchDistance < GESTURE_CONFIG.PINCH_THRESHOLD) {
-        const handWorldPos = normalizedToWorld({ x: indexTip.x, y: indexTip.y });
-        const newPosition = {
-          x: handWorldPos.x - (handState.dragOffset?.x || 0),
-          y: handWorldPos.y - (handState.dragOffset?.y || 0),
-        };
-        objectActions.updateObjectPosition(selectedId, newPosition);
+    // === 检测捏合边沿 ===
+    const pinchStart = !handState.wasPinching && isPinching;  // 上升沿：手指合起
+    const pinchEnd = handState.wasPinching && !isPinching;    // 下降沿：手指分开
 
-        // 同步更新 Three.js 对象
-        const sceneAPI = (window as any).svgSceneAPI;
-        if (sceneAPI) {
-          const svgObjects = sceneAPI.getSVGObjects();
-          const svgObj = svgObjects?.get(selectedId);
-          if (svgObj) {
-            svgObj.updatePosition({ x: newPosition.x, y: newPosition.y, z: 0 });
-          }
-        }
-      } else {
-        // 释放选中
-        handActions.setSelected(side, false);
-        objectActions.selectObject(null);
+    // 更新上一帧状态
+    handActions.setWasPinching(side, isPinching);
+    handActions.setPinching(side, isPinching, pinchDistance);
 
-        // 取消对象高亮
-        const sceneAPI = (window as any).svgSceneAPI;
-        if (sceneAPI) {
-          const svgObjects = sceneAPI.getSVGObjects();
-          svgObjects?.forEach(obj => obj.setSelected(false));
+    const touchedId = findObjectUnderFinger(indexTip);
+
+    // === 捏合开始：记录手指下的对象和时间 ===
+    if (pinchStart) {
+      handActions.setPinchStartObject(side, touchedId);
+      handActions.setPinchStartTime(side, Date.now());
+    }
+
+    // === 捏合结束：检测是否完成点击 ===
+    if (pinchEnd) {
+      const pinchStartId = handState.pinchStartObjectId;
+      const pinchDuration = Date.now() - handState.pinchStartTime;
+      const isQuickClick = pinchDuration < CLICK_TIMEOUT;
+
+      if (pinchStartId && pinchStartId === touchedId && isQuickClick) {
+        // 在同一对象上完成快速点击
+        if (currentSelectedId !== pinchStartId) {
+          // 点击新对象：切换选中
+          selectObject(pinchStartId);
         }
+        // 如果点击已选中的对象：无操作（保持选中）
+      } else if (touchedId === null && pinchStartId === null && isQuickClick) {
+        // 在空白处完成快速点击：取消选中
+        deselectAll();
       }
-    } else {
-      // 尝试选中对象
-      if (pinchDistance < GESTURE_CONFIG.PINCH_THRESHOLD) {
-        let closestId: string | null = null;
-        let closestDist = Infinity;
+      // 超过1秒或不在同一对象上 → 不算点击，忽略
 
-        for (const [id, objState] of Object.entries(objectStore.objects)) {
-          if (isPointNearObject(indexTip, objState.position)) {
-            const handWorldPos = normalizedToWorld({ x: indexTip.x, y: indexTip.y });
-            const dist = Math.sqrt(
-              Math.pow(handWorldPos.x - objState.position.x, 2) +
-              Math.pow(handWorldPos.y - objState.position.y, 2)
-            );
-            if (dist < closestDist) {
-              closestDist = dist;
-              closestId = id;
-            }
-          }
+      // 清除捏合开始记录
+      handActions.setPinchStartObject(side, null);
+      // 停止拖拽
+      if (handState.isDragging) {
+        handActions.setDragging(side, false);
+      }
+      return;
+    }
+
+    // === 捏合中：处理拖拽 ===
+    if (isPinching && currentSelectedId) {
+      if (touchedId === currentSelectedId) {
+        // 捏合已选中的对象：开始/继续拖拽
+        if (!handState.isDragging) {
+          startDragging(currentSelectedId, indexTip);
         }
-
-        if (closestId && closestDist < 1.5) {
-          handActions.setSelected(side, true);
-          objectActions.selectObject(closestId);
-
-          const handWorldPos = normalizedToWorld({ x: indexTip.x, y: indexTip.y });
-          const objState = objectStore.objects[closestId];
-          handActions.setDragOffset(side, {
-            x: handWorldPos.x - objState.position.x,
-            y: handWorldPos.y - objState.position.y,
-            z: 0,
-          });
-
-          // 高亮选中对象
-          const sceneAPI = (window as any).svgSceneAPI;
-          if (sceneAPI) {
-            const svgObjects = sceneAPI.getSVGObjects();
-            const svgObj = svgObjects?.get(closestId);
-            if (svgObj) {
-              svgObj.setSelected(true);
-            }
-          }
-        }
+        updateObjectPosition(currentSelectedId, indexTip);
       }
     }
+  }
+
+  /**
+   * 选中对象
+   */
+  function selectObject(id: string) {
+    // 先隐藏所有对象的高亮
+    const sceneAPI = (window as any).svgSceneAPI;
+    if (sceneAPI) {
+      const svgObjects = sceneAPI.getSVGObjects();
+      svgObjects?.forEach((obj: any) => obj.setSelected(false));
+    }
+
+    objectActions.selectObject(id);
+
+    // 显示选中轮廓
+    if (sceneAPI) {
+      const svgObjects = sceneAPI.getSVGObjects();
+      const svgObj = svgObjects?.get(id);
+      if (svgObj) {
+        svgObj.setSelected(true);
+      }
+    }
+  }
+
+  /**
+   * 开始拖拽
+   */
+  function startDragging(id: string, indexTip: { x: number; y: number }) {
+    const handWorldPos = normalizedToWorld({ x: indexTip.x, y: indexTip.y });
+    const objState = objectStore.objects[id];
+
+    handActions.setDragOffset('Right', {
+      x: handWorldPos.x - objState.position.x,
+      y: handWorldPos.y - objState.position.y,
+      z: 0,
+    });
+    handActions.setDragging('Right', true);
+  }
+
+  /**
+   * 更新对象位置（拖拽中）
+   */
+  function updateObjectPosition(id: string, indexTip: { x: number; y: number }) {
+    const handState = handStore.right;
+    const handWorldPos = normalizedToWorld({ x: indexTip.x, y: indexTip.y });
+    const newPosition = {
+      x: handWorldPos.x - (handState.dragOffset?.x || 0),
+      y: handWorldPos.y - (handState.dragOffset?.y || 0),
+    };
+
+    objectActions.updateObjectPosition(id, newPosition);
+
+    // 同步更新 Three.js 对象
+    const sceneAPI = (window as any).svgSceneAPI;
+    if (sceneAPI) {
+      const svgObjects = sceneAPI.getSVGObjects();
+      const svgObj = svgObjects?.get(id);
+      if (svgObj) {
+        svgObj.updatePosition({ x: newPosition.x, y: newPosition.y, z: 0 });
+      }
+    }
+  }
+
+  /**
+   * 取消所有选中
+   */
+  function deselectAll() {
+    // 取消对象高亮
+    const sceneAPI = (window as any).svgSceneAPI;
+    if (sceneAPI) {
+      const svgObjects = sceneAPI.getSVGObjects();
+      svgObjects?.forEach((obj: any) => obj.setSelected(false));
+    }
+    objectActions.selectObject(null);
   }
 
   /**
