@@ -85,18 +85,19 @@ export function SVGScene() {
 
         // 使用 2D Sprite
         const originalSize = SVGRegistry.getSize(id);
+        const shapes = SVGRegistry.getShapes(id);
         const svgObj = new SVGObject({
           id,
           texture,
           position,
           baseScale: LAYOUT_CONFIG.baseScale,
           originalSize,
+          shapes,  // 传入 shapes 用于计算精确的内容边界
         });
 
         svgObjects.set(id, svgObj);
         scene.add(svgObj.mesh);
         scene.add(svgObj.hitPlane);
-        scene.add(svgObj.outlineMesh);
 
         // 收集初始位置用于 store 更新
         initialPositions[id] = { x: position.x, y: position.y, z: position.z };
@@ -141,9 +142,6 @@ export function SVGScene() {
 
             // 更新 hitPlane 位置
             obj.hitPlane.position.z = floatOffset;
-
-            // 更新 outlineMesh 位置
-            obj.outlineMesh.position.z = floatOffset;
           }
         });
       });
@@ -208,6 +206,12 @@ export function SVGScene() {
           getScene,
           getCamera,
           getSVGObjects,
+          setSelectedWithScene: (id: string, selected: boolean) => {
+            const obj = svgObjects.get(id);
+            if (obj) {
+              obj.setSelected(selected, scene);
+            }
+          },
         };
       } else {
         console.error('[SVGScene] THREE.js not loaded');

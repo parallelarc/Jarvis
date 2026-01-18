@@ -12,6 +12,7 @@ interface SVGSceneAPI {
   getScene(): any;
   getCamera(): any;
   getSVGObjects(): Map<string, SVGObject> | undefined;
+  setSelectedWithScene?(id: string, selected: boolean): void;  // 新增 Affinity 风格选中 API
 }
 
 /**
@@ -72,6 +73,16 @@ export function syncSVGObjectScale(id: string, scale: number): boolean {
  * 同步设置 SVG 对象选中状态
  */
 export function syncSVGObjectSelected(id: string, selected: boolean): boolean {
+  const sceneAPI = getSceneAPI();
+  if (!sceneAPI) return false;
+
+  // 使用新的 setSelectedWithScene API（需要 scene 参数用于创建选中效果）
+  if (typeof sceneAPI.setSelectedWithScene === 'function') {
+    sceneAPI.setSelectedWithScene(id, selected);
+    return true;
+  }
+
+  // 回退到旧 API（兼容性）
   return withSVGObject(id, obj => { obj.setSelected(selected); return true; }, false);
 }
 
