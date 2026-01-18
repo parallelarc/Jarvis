@@ -5,11 +5,17 @@
 
 import type * as THREE from 'three';
 
+export interface SVGSize {
+  width: number;
+  height: number;
+}
+
 export interface SVGAsset {
   id: 'v' | 'b' | 'o' | 't' | 'flower' | 'bot';
   name: string;
   path: string;
   texture?: THREE.Texture;
+  originalSize?: SVGSize;  // SVG 原始尺寸（从 viewBox 获取）
 }
 
 export const SVG_ASSETS: SVGAsset[] = [
@@ -23,6 +29,37 @@ export const SVG_ASSETS: SVGAsset[] = [
 
 export class SVGRegistry {
   private static textures: Map<string, THREE.Texture> = new Map();
+  private static sizes: Map<string, SVGSize> = new Map();
+
+  /**
+   * 从 SVG 文本中解析原始尺寸
+   * 优先使用 viewBox，否则使用 width/height 属性
+   */
+  private static parseSVGSize(svgText: string): SVGSize {
+    // 尝试解析 viewBox
+    const viewBoxMatch = svgText.match(/viewBox\s*=\s*["']([^"']+)["']/);
+    if (viewBoxMatch) {
+      const values = viewBoxMatch[1].trim().split(/\s+/).map(Number);
+      if (values.length === 4 && !values.some(isNaN)) {
+        return { width: values[2], height: values[3] };
+      }
+    }
+
+    // 尝试解析 width/height 属性
+    const widthMatch = svgText.match(/width\s*=\s*["']([^"']+)["']/);
+    const heightMatch = svgText.match(/height\s*=\s*["']([^"']+)["']/);
+
+    if (widthMatch && heightMatch) {
+      const width = parseFloat(widthMatch[1]);
+      const height = parseFloat(heightMatch[1]);
+      if (!isNaN(width) && !isNaN(height)) {
+        return { width, height };
+      }
+    }
+
+    // 默认返回正方形
+    return { width: 1, height: 1 };
+  }
 
   /**
    * 将 SVG 转换为 DataURL
@@ -48,6 +85,11 @@ export class SVGRegistry {
       }
 
       const svgText = await response.text();
+
+      // 解析并存储 SVG 原始尺寸
+      const size = this.parseSVGSize(svgText);
+      this.sizes.set(asset.id, size);
+
       const dataUrl = await this.svgToDataURL(svgText);
 
       return new Promise((resolve, reject) => {
@@ -86,11 +128,19 @@ export class SVGRegistry {
   }
 
   /**
+   * 获取 SVG 原始尺寸
+   */
+  static getSize(id: string): SVGSize | undefined {
+    return this.sizes.get(id);
+  }
+
+  /**
    * 释放所有纹理资源
    */
   static dispose(): void {
     this.textures.forEach(texture => texture.dispose());
     this.textures.clear();
+    this.sizes.clear();
   }
 
   /**
@@ -102,5 +152,6 @@ export class SVGRegistry {
       texture.dispose();
       this.textures.delete(id);
     }
+    this.sizes.delete(id);
   }
 }

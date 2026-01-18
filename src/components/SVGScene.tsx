@@ -83,11 +83,15 @@ export function SVGScene() {
           0
         );
 
+        // 从 SVGRegistry 获取原始尺寸
+        const originalSize = SVGRegistry.getSize(id);
+
         const svgObj = new SVGObject({
           id,
           texture,
           position,
           baseScale: LAYOUT_CONFIG.baseScale,
+          originalSize,  // 传入原始尺寸用于精确的包围盒计算
         });
 
         svgObjects.set(id, svgObj);

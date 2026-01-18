@@ -68,16 +68,24 @@ export function useSVGInteraction() {
 
   /**
    * 检查点是否接近对象（基于位置距离）
+   * @param point - 归一化坐标点
+   * @param objectPosition - 对象的世界坐标位置
+   * @param objectScale - 对象的缩放比例（用于计算动态阈值）
+   * @param thresholdMultiplier - 阈值倍数，默认 0.6（检测半径约为对象大小的 60%）
    */
   function isPointNearObject(
     point: { x: number; y: number },
     objectPosition: { x: number; y: number; z?: number },
-    threshold: number = 1.5
+    objectScale: number = 1.0,
+    thresholdMultiplier: number = 0.6
   ): boolean {
     const worldPos = normalizedToWorld({ x: point.x, y: point.y });
     const dx = worldPos.x - objectPosition.x;
     const dy = worldPos.y - objectPosition.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // 基于对象大小计算动态阈值
+    const threshold = (objectScale * 0.5) * thresholdMultiplier;
     return distance < threshold;
   }
 
@@ -108,6 +116,8 @@ export function useSVGInteraction() {
     if (selectedId) {
       // 已选中对象，继续拖拽
       const objState = objectStore.objects[selectedId];
+      const svgObj = cfg.svgObjects.get(selectedId);
+
       if (handState.isSelected && pinchDistance < GESTURE_CONFIG.PINCH_THRESHOLD) {
         const handWorldPos = normalizedToWorld({ x: indexTip.x, y: indexTip.y });
         objectActions.updateObjectPosition(selectedId, {
@@ -116,7 +126,6 @@ export function useSVGInteraction() {
         });
 
         // 同步更新 SVGObject
-        const svgObj = cfg.svgObjects.get(selectedId);
         if (svgObj) {
           svgObj.updatePosition({
             x: handWorldPos.x - (handState.dragOffset?.x || 0),
@@ -143,7 +152,7 @@ export function useSVGInteraction() {
 
         for (const [id, objState] of Object.entries(objectStore.objects)) {
           const svgObj = cfg.svgObjects.get(id);
-          if (svgObj && isPointNearObject(indexTip, objState.position)) {
+          if (svgObj && isPointNearObject(indexTip, objState.position, objState.scale)) {
             const handWorldPos = normalizedToWorld({ x: indexTip.x, y: indexTip.y });
             const dist = Math.sqrt(
               Math.pow(handWorldPos.x - objState.position.x, 2) +
@@ -156,23 +165,27 @@ export function useSVGInteraction() {
           }
         }
 
-        if (closestId && closestDist < 1.5) {
-          handActions.setSelected(side, true);
-          objectActions.selectObject(closestId);
-
-          // 计算拖拽偏移
-          const handWorldPos = normalizedToWorld({ x: indexTip.x, y: indexTip.y });
+        // 使用动态阈值验证选中的对象
+        if (closestId) {
           const objState = objectStore.objects[closestId];
-          handActions.setDragOffset(side, {
-            x: handWorldPos.x - objState.position.x,
-            y: handWorldPos.y - objState.position.y,
-            z: 0,
-          });
+          const threshold = (objState.scale * 0.5) * 0.6;
+          if (closestDist < threshold) {
+            handActions.setSelected(side, true);
+            objectActions.selectObject(closestId);
 
-          // 高亮选中对象
-          const svgObj = cfg.svgObjects.get(closestId);
-          if (svgObj) {
-            svgObj.setSelected(true);
+            // 计算拖拽偏移
+            const handWorldPos = normalizedToWorld({ x: indexTip.x, y: indexTip.y });
+            handActions.setDragOffset(side, {
+              x: handWorldPos.x - objState.position.x,
+              y: handWorldPos.y - objState.position.y,
+              z: 0,
+            });
+
+            // 高亮选中对象
+            const svgObj = cfg.svgObjects.get(closestId);
+            if (svgObj) {
+              svgObj.setSelected(true);
+            }
           }
         }
       }
@@ -264,7 +277,7 @@ export function useSVGInteraction() {
     let isTouching = false;
 
     for (const [id, objState] of Object.entries(objectStore.objects)) {
-      if (isPointNearObject(indexTip, objState.position)) {
+      if (isPointNearObject(indexTip, objState.position, objState.scale)) {
         isTouching = true;
         break;
       }

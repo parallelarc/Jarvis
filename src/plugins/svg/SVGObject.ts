@@ -4,6 +4,7 @@
  */
 
 import type * as THREE from 'three';
+import type { SVGSize } from './SVGRegistry';
 
 /**
  * 创建蓝色轮廓纹理（Affinity 风格）
@@ -51,6 +52,7 @@ export interface SVGObjectConfig {
   texture: THREE.Texture;
   position: THREE.Vector3;
   baseScale?: number;
+  originalSize?: SVGSize;  // SVG 原始尺寸（用于精确的包围盒计算）
 }
 
 export class SVGObject {
@@ -59,12 +61,22 @@ export class SVGObject {
   public hitPlane: THREE.Mesh;
   private texture: THREE.Texture;
   private baseScale: number;
+  private originalSize: SVGSize;  // 存储原始尺寸
+  private aspectX: number;  // 宽高比（已归一化）
+  private aspectY: number;  // 宽高比（已归一化）
   private outlineMesh: THREE.Sprite;
 
   constructor(config: SVGObjectConfig) {
     this.id = config.id;
     this.texture = config.texture;
     this.baseScale = config.baseScale ?? 1.0;
+    // 存储 SVG 原始尺寸，默认为正方形
+    this.originalSize = config.originalSize ?? { width: 1, height: 1 };
+
+    // 计算宽高比（归一化，使较大边为 1）
+    const maxDim = Math.max(this.originalSize.width, this.originalSize.height);
+    this.aspectX = this.originalSize.width / maxDim;
+    this.aspectY = this.originalSize.height / maxDim;
 
     const THREE = window.THREE as any;
 
@@ -79,11 +91,15 @@ export class SVGObject {
 
     this.mesh = new THREE.Sprite(spriteMaterial);
     this.mesh.position.copy(config.position);
-    this.mesh.scale.set(this.baseScale, this.baseScale, 1);
+    // 使用实际宽高比设置 scale
+    this.mesh.scale.set(this.baseScale * this.aspectX, this.baseScale * this.aspectY, 1);
     this.mesh.userData = { svgObject: this, id: this.id };
 
-    // 创建不可见的射线检测平面
-    const hitPlaneGeometry = new THREE.PlaneGeometry(this.baseScale, this.baseScale);
+    // 创建不可见的射线检测平面 - 使用实际宽高比
+    const hitPlaneGeometry = new THREE.PlaneGeometry(
+      this.baseScale * this.aspectX,
+      this.baseScale * this.aspectY
+    );
     const hitPlaneMaterial = new THREE.MeshBasicMaterial({
       visible: false,
       side: THREE.DoubleSide,
@@ -104,7 +120,7 @@ export class SVGObject {
 
     this.outlineMesh = new THREE.Sprite(outlineMaterial);
     this.outlineMesh.position.copy(config.position);
-    this.outlineMesh.scale.set(this.baseScale * 1.15, this.baseScale * 1.15, 1);
+    this.outlineMesh.scale.set(this.baseScale * this.aspectX * 1.15, this.baseScale * this.aspectY * 1.15, 1);
     this.outlineMesh.renderOrder = -1; // 在主 sprite 之前渲染
   }
 
@@ -122,18 +138,18 @@ export class SVGObject {
    */
   updateScale(scale: number): void {
     const clampedScale = Math.max(0.2, Math.min(5.0, scale));
-    this.mesh.scale.set(clampedScale, clampedScale, 1);
-    this.hitPlane.scale.set(clampedScale, clampedScale, 1);
-    this.outlineMesh.scale.set(clampedScale * 1.15, clampedScale * 1.15, 1);
+    this.mesh.scale.set(clampedScale * this.aspectX, clampedScale * this.aspectY, 1);
+    this.hitPlane.scale.set(clampedScale * this.aspectX, clampedScale * this.aspectY, 1);
+    this.outlineMesh.scale.set(clampedScale * this.aspectX * 1.15, clampedScale * this.aspectY * 1.15, 1);
   }
 
   /**
    * 设置缩放（直接设置）
    */
   setScale(scale: number): void {
-    this.mesh.scale.set(scale, scale, 1);
-    this.hitPlane.scale.set(scale, scale, 1);
-    this.outlineMesh.scale.set(scale * 1.15, scale * 1.15, 1);
+    this.mesh.scale.set(scale * this.aspectX, scale * this.aspectY, 1);
+    this.hitPlane.scale.set(scale * this.aspectX, scale * this.aspectY, 1);
+    this.outlineMesh.scale.set(scale * this.aspectX * 1.15, scale * this.aspectY * 1.15, 1);
   }
 
   /**
@@ -152,20 +168,22 @@ export class SVGObject {
 
   /**
    * 获取边界框（用于点击检测）
+   * 基于实际的 SVG 宽高比计算精确的包围盒
    */
   getBounds(): THREE.Box3 {
     const THREE = window.THREE as any;
     const box = new THREE.Box3();
-    const halfSize = this.getScale() * 0.5;
+    const scaleX = this.mesh.scale.x;
+    const scaleY = this.mesh.scale.y;
 
     box.min.set(
-      this.mesh.position.x - halfSize,
-      this.mesh.position.y - halfSize,
+      this.mesh.position.x - scaleX / 2,
+      this.mesh.position.y - scaleY / 2,
       this.mesh.position.z - 0.1
     );
     box.max.set(
-      this.mesh.position.x + halfSize,
-      this.mesh.position.y + halfSize,
+      this.mesh.position.x + scaleX / 2,
+      this.mesh.position.y + scaleY / 2,
       this.mesh.position.z + 0.1
     );
 
