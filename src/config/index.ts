@@ -79,7 +79,16 @@ export const HAND_CONNECTIONS = [
 // ============================================================================
 
 export const VIEW_CONFIG = {
+  // 显示镜像设置
   MIRROR_X: true,  // 显示通过CSS镜像，保留原始坐标用于交互
+
+  // 坐标转换配置
+  // MediaPipe 归一化坐标: (0, 0) = 左上角, (1, 1) = 右下角
+  // Three.js 世界坐标: X/Y 从 -5 到 +5, Z = 0
+  NORMALIZED_CENTER: 0.5,  // 归一化坐标中心点
+  WORLD_SCALE: 10,         // 世界坐标范围（-WORLD_SCALE/2 到 +WORLD_SCALE/2）
+  INVERT_X: true,          // X 轴是否反转（与 CSS 镜像保持一致）
+  INVERT_Y: true,          // Y 轴是否反转（true = MediaPipe 坐标系向下，WebGL 向上）
 } as const;
 
 // ============================================================================

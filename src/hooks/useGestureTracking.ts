@@ -206,7 +206,14 @@ export function useGestureTracking() {
   function findObjectUnderFinger(
     indexTip: { x: number; y: number }
   ): string | null {
-    const handWorldPos = normalizedToWorld({ x: indexTip.x, y: indexTip.y });
+    const sceneAPI = (window as any).svgSceneAPI;
+    const camera = sceneAPI?.getCamera();
+    const handWorldPos = normalizedToWorld(
+      { x: indexTip.x, y: indexTip.y },
+      camera,
+      window.innerWidth,
+      window.innerHeight
+    );
     return findObjectUnderPoint(handWorldPos);
   }
 
@@ -307,7 +314,14 @@ export function useGestureTracking() {
    * 开始拖拽
    */
   function startDragging(id: string, indexTip: { x: number; y: number }) {
-    const handWorldPos = normalizedToWorld({ x: indexTip.x, y: indexTip.y });
+    const sceneAPI = (window as any).svgSceneAPI;
+    const camera = sceneAPI?.getCamera();
+    const handWorldPos = normalizedToWorld(
+      { x: indexTip.x, y: indexTip.y },
+      camera,
+      window.innerWidth,
+      window.innerHeight
+    );
     const objState = objectStore.objects[id];
 
     handActions.setDragOffset('Right', {
@@ -323,7 +337,14 @@ export function useGestureTracking() {
    */
   function updateObjectPosition(id: string, indexTip: { x: number; y: number }) {
     const handState = handStore.right;
-    const handWorldPos = normalizedToWorld({ x: indexTip.x, y: indexTip.y });
+    const sceneAPI = (window as any).svgSceneAPI;
+    const camera = sceneAPI?.getCamera();
+    const handWorldPos = normalizedToWorld(
+      { x: indexTip.x, y: indexTip.y },
+      camera,
+      window.innerWidth,
+      window.innerHeight
+    );
     const newPosition = {
       x: handWorldPos.x - (handState.dragOffset?.x || 0),
       y: handWorldPos.y - (handState.dragOffset?.y || 0),
