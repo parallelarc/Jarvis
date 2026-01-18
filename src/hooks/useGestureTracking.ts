@@ -7,9 +7,16 @@ import { createSignal, onMount, onCleanup } from 'solid-js';
 import { handStore, handActions } from '@/stores/handStore';
 import { animationActions } from '@/stores/animationStore';
 import { objectStore, objectActions } from '@/stores/objectStore';
-import { GESTURE_CONFIG } from '@/config';
+import { GESTURE_CONFIG, HAND_CONNECTIONS, INTERACTION_CONFIG } from '@/config';
 import { detectHandGestures } from '@/domain/GestureDetector';
 import { normalizedToWorld, calculateDistance } from '@/utils/math';
+import {
+  findObjectUnderPoint,
+  syncSVGObjectPosition,
+  syncSVGObjectScale,
+  syncSVGObjectSelected,
+  syncAllSVGObjectsSelected,
+} from '@/utils/three-sync';
 import type { Landmarks } from '@/core/types';
 
 // MediaPipe 类型声明
@@ -77,21 +84,6 @@ export function useGestureTracking() {
     if (gestures.openPalm) return 'Open Palm';
     if (gestures.fist) return 'Fist';
     return null;
-  }
-
-  /**
-   * 检查点是否接近对象（基于位置距离）
-   */
-  function isPointNearObject(
-    point: { x: number; y: number },
-    objectPosition: { x: number; y: number; z?: number },
-    threshold: number = 1.5
-  ): boolean {
-    const worldPos = normalizedToWorld({ x: point.x, y: point.y });
-    const dx = worldPos.x - objectPosition.x;
-    const dy = worldPos.y - objectPosition.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    return distance < threshold;
   }
 
   /**
@@ -177,13 +169,7 @@ export function useGestureTracking() {
       // 清理未检测到的手部状态
       ['Left', 'Right'].forEach((side) => {
         if (!detectedSides.has(side as 'Left' | 'Right')) {
-          handActions.setHandActive(side as 'Left' | 'Right', false);
-          handActions.setTouching(side as 'Left' | 'Right', false);
-          handActions.setPinching(side as 'Left' | 'Right', false, 0);
-          handActions.setGesture(side as 'Left' | 'Right', null);
-          // 重置点击检测状态
-          handActions.setWasPinching(side as 'Left' | 'Right', false);
-          handActions.setPinchStartObject(side as 'Left' | 'Right', null);
+          handActions.resetHandState(side as 'Left' | 'Right');
         }
       });
 
@@ -200,64 +186,40 @@ export function useGestureTracking() {
   }
 
   /**
-   * 处理触摸检测
+   * 处理触摸检测（基于 bbox）
    */
   function processTouchDetection(
     landmarks: Array<{ x: number; y: number; z: number }>,
     side: 'Left' | 'Right'
   ) {
     const indexTip = landmarks[8];
-    let isTouching = false;
+    const touchedId = findObjectUnderFinger(indexTip);
 
-    for (const [id, objState] of Object.entries(objectStore.objects)) {
-      if (isPointNearObject(indexTip, objState.position)) {
-        isTouching = true;
-        break;
-      }
-    }
-
-    handActions.setTouching(side, isTouching);
+    handActions.setTouching(side, touchedId !== null);
+    handActions.setTouchedObjectId(side, touchedId);
   }
 
   /**
-   * 查找手指下的对象
+   * 查找手指下的对象（基于 bbox）
+   * 使用 three-sync 工具函数进行精确的碰撞检测
    */
   function findObjectUnderFinger(
     indexTip: { x: number; y: number }
   ): string | null {
-    let closestId: string | null = null;
-    let closestDist = Infinity;
-
-    for (const [id, objState] of Object.entries(objectStore.objects)) {
-      if (isPointNearObject(indexTip, objState.position)) {
-        const handWorldPos = normalizedToWorld({ x: indexTip.x, y: indexTip.y });
-        const dist = Math.sqrt(
-          Math.pow(handWorldPos.x - objState.position.x, 2) +
-            Math.pow(handWorldPos.y - objState.position.y, 2)
-        );
-        if (dist < closestDist) {
-          closestDist = dist;
-          closestId = id;
-        }
-      }
-    }
-
-    return closestDist < 1.5 ? closestId : null;
+    const handWorldPos = normalizedToWorld({ x: indexTip.x, y: indexTip.y });
+    return findObjectUnderPoint(handWorldPos);
   }
 
   /**
    * 处理拖拽交互 - 点击选中 + 捏合拖拽
    *
    * 点击 = 捏合开始（手指合起）+ 捏合结束（手指分开）的完整动作
-   * 点击必须在 1 秒内完成才算"干脆的点击"
+   * 点击必须在配置的时间限制内完成才算"干脆的点击"
    */
   function processDragInteraction(
     landmarks: Array<{ x: number; y: number; z: number }>,
     side: 'Left' | 'Right'
   ) {
-    // 点击时间限制配置
-    const CLICK_TIMEOUT = 1000; // 1秒内完成才算"干脆的点击"
-
     const thumbTip = landmarks[4];
     const indexTip = landmarks[8];
     const pinchDistance = calculateDistance(
@@ -292,7 +254,7 @@ export function useGestureTracking() {
     if (pinchEnd) {
       const pinchStartId = handState.pinchStartObjectId;
       const pinchDuration = Date.now() - handState.pinchStartTime;
-      const isQuickClick = pinchDuration < CLICK_TIMEOUT;
+      const isQuickClick = pinchDuration < INTERACTION_CONFIG.CLICK_TIMEOUT_MS;
 
       if (pinchStartId && pinchStartId === touchedId && isQuickClick) {
         // 在同一对象上完成快速点击
@@ -305,7 +267,7 @@ export function useGestureTracking() {
         // 在空白处完成快速点击：取消选中
         deselectAll();
       }
-      // 超过1秒或不在同一对象上 → 不算点击，忽略
+      // 超时或不在同一对象上 → 不算点击，忽略
 
       // 清除捏合开始记录
       handActions.setPinchStartObject(side, null);
@@ -333,22 +295,12 @@ export function useGestureTracking() {
    */
   function selectObject(id: string) {
     // 先隐藏所有对象的高亮
-    const sceneAPI = (window as any).svgSceneAPI;
-    if (sceneAPI) {
-      const svgObjects = sceneAPI.getSVGObjects();
-      svgObjects?.forEach((obj: any) => obj.setSelected(false));
-    }
+    syncAllSVGObjectsSelected(false);
 
     objectActions.selectObject(id);
 
     // 显示选中轮廓
-    if (sceneAPI) {
-      const svgObjects = sceneAPI.getSVGObjects();
-      const svgObj = svgObjects?.get(id);
-      if (svgObj) {
-        svgObj.setSelected(true);
-      }
-    }
+    syncSVGObjectSelected(id, true);
   }
 
   /**
@@ -380,14 +332,7 @@ export function useGestureTracking() {
     objectActions.updateObjectPosition(id, newPosition);
 
     // 同步更新 Three.js 对象
-    const sceneAPI = (window as any).svgSceneAPI;
-    if (sceneAPI) {
-      const svgObjects = sceneAPI.getSVGObjects();
-      const svgObj = svgObjects?.get(id);
-      if (svgObj) {
-        svgObj.updatePosition({ x: newPosition.x, y: newPosition.y, z: 0 });
-      }
-    }
+    syncSVGObjectPosition(id, { x: newPosition.x, y: newPosition.y, z: 0 });
   }
 
   /**
@@ -395,11 +340,7 @@ export function useGestureTracking() {
    */
   function deselectAll() {
     // 取消对象高亮
-    const sceneAPI = (window as any).svgSceneAPI;
-    if (sceneAPI) {
-      const svgObjects = sceneAPI.getSVGObjects();
-      svgObjects?.forEach((obj: any) => obj.setSelected(false));
-    }
+    syncAllSVGObjectsSelected(false);
     objectActions.selectObject(null);
   }
 
@@ -442,7 +383,6 @@ export function useGestureTracking() {
       handActions.setZoomMode(true);
       handActions.setZoomInitials(
         objState.scale,
-        currentDistance,
         currentDistance
       );
       handActions.setPreviousHandsDistance(currentDistance);
@@ -452,19 +392,15 @@ export function useGestureTracking() {
     const initialScale = handStore.zoomMode.initialSpread;
     const initialDistance = handStore.zoomMode.leftInitialDist;
     const scaleFactor = currentDistance / initialDistance;
-    const newScale = Math.max(0.2, Math.min(5.0, initialScale * scaleFactor));
+    const newScale = Math.max(
+      INTERACTION_CONFIG.SCALE_MIN,
+      Math.min(INTERACTION_CONFIG.SCALE_MAX, initialScale * scaleFactor)
+    );
 
     objectActions.updateObjectScale(selectedId, newScale);
 
     // 同步更新 Three.js 对象
-    const sceneAPI = (window as any).svgSceneAPI;
-    if (sceneAPI) {
-      const svgObjects = sceneAPI.getSVGObjects();
-      const svgObj = svgObjects?.get(selectedId);
-      if (svgObj) {
-        svgObj.setScale(newScale);
-      }
-    }
+    syncSVGObjectScale(selectedId, newScale);
 
     handActions.setPreviousHandsDistance(currentDistance);
   }
@@ -476,15 +412,6 @@ export function useGestureTracking() {
     if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
       return;
     }
-
-    const HAND_CONNECTIONS = [
-      [0, 1], [1, 2], [2, 3], [3, 4],
-      [0, 5], [5, 6], [6, 7], [7, 8],
-      [0, 9], [9, 10], [10, 11], [11, 12],
-      [0, 13], [13, 14], [14, 15], [15, 16],
-      [0, 17], [17, 18], [18, 19], [19, 20],
-      [5, 9], [9, 13], [13, 17],
-    ];
 
     const canvas = ctx.canvas;
     const width = canvas.width;

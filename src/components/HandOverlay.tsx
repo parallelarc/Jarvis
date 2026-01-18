@@ -22,12 +22,12 @@ export function HandOverlay() {
 
     // 绘制左手
     if (handStore.left.active && handStore.left.landmarks) {
-      drawHandLandmarks(handStore.left.landmarks, '#a855f7');
+      drawHandLandmarks(handStore.left.landmarks, '#a855f7', 'Left');
     }
 
     // 绘制右手
     if (handStore.right.active && handStore.right.landmarks) {
-      drawHandLandmarks(handStore.right.landmarks, '#f97316');
+      drawHandLandmarks(handStore.right.landmarks, '#f97316', 'Right');
     }
 
     // 继续动画循环
@@ -37,7 +37,11 @@ export function HandOverlay() {
   /**
    * 绘制单只手的关键点
    */
-  function drawHandLandmarks(landmarks: { x: number; y: number; z: number }[], color: string) {
+  function drawHandLandmarks(
+    landmarks: { x: number; y: number; z: number }[],
+    color: string,
+    side: 'Left' | 'Right'
+  ) {
     if (!ctx || !canvasRef) return;
 
     const width = canvasRef.width;
@@ -60,8 +64,16 @@ export function HandOverlay() {
     ctx.stroke();
 
     // 绘制关键点
-    ctx.fillStyle = '#ffffff';
-    for (const landmark of landmarks) {
+    for (let i = 0; i < landmarks.length; i++) {
+      const landmark = landmarks[i];
+      let pointColor = '#ffffff';
+
+      // 右手食指端点（index 8）触摸到 bbox 时变为绿色
+      if (side === 'Right' && i === 8 && handStore.right.touchedObjectId) {
+        pointColor = '#00ff00';
+      }
+
+      ctx.fillStyle = pointColor;
       ctx.beginPath();
       ctx.arc(landmark.x * width, landmark.y * height, 3, 0, Math.PI * 2);
       ctx.fill();

@@ -10,9 +10,19 @@ import './DebugPanel.css';
 
 // 全局可见状态
 const [visible, setVisible] = createSignal(false);
+// 全局 bbox 调试模式状态
+const [debugBBox, setDebugBBox] = createSignal(false);
 
 export function toggleDebugPanel() {
   setVisible(v => !v);
+}
+
+export function getDebugBBoxState() {
+  return debugBBox();
+}
+
+export function setDebugBBoxState(value: boolean) {
+  setDebugBBox(value);
 }
 
 export function DebugPanel() {
@@ -76,6 +86,23 @@ export function DebugPanel() {
     }
   }
 
+  // 切换 BBox 显示
+  function toggleBBox() {
+    const newState = !debugBBox();
+    setDebugBBox(newState);
+
+    const sceneAPI = (window as any).svgSceneAPI;
+    if (sceneAPI) {
+      const scene = sceneAPI.getScene();
+      const svgObjects = sceneAPI.getSVGObjects();
+      if (svgObjects) {
+        svgObjects.forEach((obj: any) => {
+          obj.showDebugBounds(newState, scene);
+        });
+      }
+    }
+  }
+
   // 挂载时设置
   window.addEventListener('keydown', handleKeyDown);
 
@@ -109,6 +136,16 @@ export function DebugPanel() {
               <div class="debug-row">
                 <span>Hands:</span>
                 <span class="debug-value">{handsDetected()} detected</span>
+              </div>
+              <div class="debug-row">
+                <span>Show BBoxes:</span>
+                <button
+                  class="debug-toggle-btn"
+                  onClick={toggleBBox}
+                  classList={{ active: debugBBox() }}
+                >
+                  {debugBBox() ? 'ON' : 'OFF'}
+                </button>
               </div>
             </div>
 
@@ -233,6 +270,12 @@ function HandInfo(props: { hand: typeof handStore.left | typeof handStore.right 
             {hand().isTouching ? 'Yes' : 'No'}
           </span>
         </div>
+        <Show when={hand().touchedObjectId}>
+          <div class="debug-row">
+            <span>Touching Object:</span>
+            <span class="debug-value yes">{hand().touchedObjectId}</span>
+          </div>
+        </Show>
         <div class="debug-row">
           <span>Selected:</span>
           <span class={hand().isSelected ? 'debug-value yes' : 'debug-value no'}>

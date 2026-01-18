@@ -5,6 +5,7 @@
 
 import { createStore, produce } from 'solid-js/store';
 import type { Vector3D } from '@/core/types';
+import { INTERACTION_CONFIG } from '@/config';
 
 export interface ObjectState {
   position: Vector3D;
@@ -82,7 +83,10 @@ export const objectActions = {
    * 更新对象缩放
    */
   updateObjectScale(id: string, scale: number) {
-    const clampedScale = Math.max(0.2, Math.min(5.0, scale));
+    const clampedScale = Math.max(
+      INTERACTION_CONFIG.SCALE_MIN,
+      Math.min(INTERACTION_CONFIG.SCALE_MAX, scale)
+    );
     setObjectStore('objects', id, 'scale', clampedScale);
   },
 

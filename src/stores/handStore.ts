@@ -25,6 +25,8 @@ export type ExtendedHandState = HandState & {
   pinchStartObjectId: string | null;  // 捏合开始时手指下的对象 ID
   pinchStartTime: number;             // 捏合开始的时间戳（用于判断点击是否"干脆"）
   wasPinching: boolean;               // 上一帧的捏合状态（用于检测边沿）
+  // bbox 触摸检测
+  touchedObjectId: string | null;     // 当前食指触摸到的对象 ID（基于 bbox）
 };
 
 function createInitialHandState(side: HandSide): ExtendedHandState {
@@ -51,6 +53,8 @@ function createInitialHandState(side: HandSide): ExtendedHandState {
     pinchStartObjectId: null,
     pinchStartTime: 0,
     wasPinching: false,
+    // bbox 触摸检测初始值
+    touchedObjectId: null,
   };
 }
 
@@ -68,7 +72,6 @@ export type HandStoreState = {
     active: boolean;
     initialSpread: number;
     leftInitialDist: number;
-    rightInitialDist: number;
   };
   previousHandsDistance: number | null;
 };
@@ -80,7 +83,6 @@ const initialState: HandStoreState = {
     active: false,
     initialSpread: 1.0,
     leftInitialDist: 0,
-    rightInitialDist: 0,
   },
   previousHandsDistance: null,
 };
@@ -140,11 +142,10 @@ export const handActions = {
     setHandStore('zoomMode', 'active', active);
   },
 
-  setZoomInitials(spread: number, leftDist: number, rightDist: number) {
+  setZoomInitials(spread: number, leftDist: number) {
     setHandStore('zoomMode', produce((zoom) => {
       zoom.initialSpread = spread;
       zoom.leftInitialDist = leftDist;
-      zoom.rightInitialDist = rightDist;
     }));
   },
 
@@ -188,5 +189,20 @@ export const handActions = {
   setWasPinching(side: HandSide, wasPinching: boolean) {
     const key = sideToKey(side);
     setHandStore(key, 'wasPinching', wasPinching);
+  },
+
+  // bbox 触摸检测相关
+  setTouchedObjectId(side: HandSide, objectId: string | null) {
+    const key = sideToKey(side);
+    setHandStore(key, 'touchedObjectId', objectId);
+  },
+
+  /**
+   * 重置单只手的状态（当手不再被检测到时调用）
+   * 统一清理所有手部相关状态
+   */
+  resetHandState(side: HandSide) {
+    const key = sideToKey(side);
+    setHandStore(key, reconcile(createInitialHandState(side)));
   },
 };

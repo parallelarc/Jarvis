@@ -15,6 +15,7 @@
 
 import type { Vector3D, Landmarks, HandSide } from '@/core/types';
 import { GESTURE_DETECTION_CONFIG } from '@/config';
+import { calculateDistance } from '@/utils/math';
 
 // ========== 类型定义 ==========
 
@@ -153,16 +154,6 @@ const gestureHistory: Record<'leftHand' | 'rightHand', HandGestureHistory> = {
 // ========== 基础辅助函数 ==========
 
 /**
- * 计算两点之间的欧几里得距离
- */
-function calculateDistance(p1: Landmark3D | Vector3D, p2: Landmark3D | Vector3D): number {
-  const dx = p1.x - p2.x;
-  const dy = p1.y - p2.y;
-  const dz = (p1.z ?? 0) - (p2.z ?? 0);
-  return Math.sqrt(dx * dx + dy * dy + dz * dz);
-}
-
-/**
  * 计算点到参考点的距离
  */
 function distanceFromWrist(landmarks: Landmarks, pointIndex: number, referenceIndex = 0): number {
@@ -271,31 +262,64 @@ export function countExtendedFingers(landmarks: Landmarks): number {
 // ========== 捏合状态检测 ==========
 
 /**
+ * 手指捏合关键点索引映射
+ */
+const FINGER_PINCH_INDICES = {
+  index: 8,
+  middle: 12,
+  ring: 16,
+  pinky: 20,
+} as const;
+
+/**
+ * 捏合手指类型
+ */
+export type PinchingFinger = keyof typeof FINGER_PINCH_INDICES;
+
+/**
+ * 检测拇指与指定手指是否捏合（通用函数）
+ * @param landmarks - 手部关键点
+ * @param finger - 要检测的手指 ('index' | 'middle' | 'ring' | 'pinky')
+ * @returns 是否捏合
+ */
+export function isThumbPinching(
+  landmarks: Landmarks,
+  finger: PinchingFinger
+): boolean {
+  return calculateDistance(landmarks[4], landmarks[FINGER_PINCH_INDICES[finger]])
+    < GESTURE_DETECTION_CONFIG.PINCH_THRESHOLD;
+}
+
+/**
  * 检测拇指与食指是否捏合
+ * @deprecated 使用 isThumbPinching(landmarks, 'index') 代替
  */
 export function isThumbIndexPinching(landmarks: Landmarks): boolean {
-  return calculateDistance(landmarks[4], landmarks[8]) < GESTURE_DETECTION_CONFIG.PINCH_THRESHOLD;
+  return isThumbPinching(landmarks, 'index');
 }
 
 /**
  * 检测拇指与中指是否捏合
+ * @deprecated 使用 isThumbPinching(landmarks, 'middle') 代替
  */
 export function isThumbMiddlePinching(landmarks: Landmarks): boolean {
-  return calculateDistance(landmarks[4], landmarks[12]) < GESTURE_DETECTION_CONFIG.PINCH_THRESHOLD;
+  return isThumbPinching(landmarks, 'middle');
 }
 
 /**
  * 检测拇指与无名指是否捏合
+ * @deprecated 使用 isThumbPinching(landmarks, 'ring') 代替
  */
 export function isThumbRingPinching(landmarks: Landmarks): boolean {
-  return calculateDistance(landmarks[4], landmarks[16]) < GESTURE_DETECTION_CONFIG.PINCH_THRESHOLD;
+  return isThumbPinching(landmarks, 'ring');
 }
 
 /**
  * 检测拇指与小指是否捏合
+ * @deprecated 使用 isThumbPinching(landmarks, 'pinky') 代替
  */
 export function isThumbPinkyPinching(landmarks: Landmarks): boolean {
-  return calculateDistance(landmarks[4], landmarks[20]) < GESTURE_DETECTION_CONFIG.PINCH_THRESHOLD;
+  return isThumbPinching(landmarks, 'pinky');
 }
 
 /**

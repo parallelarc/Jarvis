@@ -5,7 +5,7 @@
 
 import { onMount, onCleanup, untrack } from 'solid-js';
 import { objectStore, objectActions } from '@/stores/objectStore';
-import { SVGRegistry } from '@/plugins/svg/SVGRegistry';
+import { SVGRegistry, SVG_OBJECT_IDS } from '@/plugins/svg/SVGRegistry';
 import { SVGObject } from '@/plugins/svg/SVGObject';
 import { CAMERA_CONFIG } from '@/config';
 
@@ -67,7 +67,7 @@ export function SVGScene() {
   async function initSVGObjects() {
     try {
       const textures = await SVGRegistry.loadAllTextures();
-      const THREE = window.THREE;
+      const THREE = window.THREE as any;
 
       // 计算起始位置（居中排列）
       const startX = -((textures.length - 1) * LAYOUT_CONFIG.spacing) / 2;
@@ -76,22 +76,21 @@ export function SVGScene() {
       const initialPositions: Record<string, { x: number; y: number; z: number }> = {};
 
       textures.forEach((texture: any, index: number) => {
-        const id = ['v', 'b', 'o', 't', 'flower', 'bot'][index];
+        const id = SVG_OBJECT_IDS[index];
         const position = new THREE.Vector3(
           startX + index * LAYOUT_CONFIG.spacing,
           LAYOUT_CONFIG.initialY,
           0
         );
 
-        // 从 SVGRegistry 获取原始尺寸
+        // 使用 2D Sprite
         const originalSize = SVGRegistry.getSize(id);
-
         const svgObj = new SVGObject({
           id,
           texture,
           position,
           baseScale: LAYOUT_CONFIG.baseScale,
-          originalSize,  // 传入原始尺寸用于精确的包围盒计算
+          originalSize,
         });
 
         svgObjects.set(id, svgObj);
@@ -106,7 +105,14 @@ export function SVGScene() {
       // 批量更新 store 中的初始位置
       objectActions.setInitialPositions(initialPositions);
 
-      console.log('[SVGScene] Initialized', svgObjects.size, 'SVG objects');
+      console.log(`[SVGScene] Initialized ${svgObjects.size} SVG objects (2D mode)`);
+
+      // 显示调试信息在页面上
+      const debugDiv = document.createElement('div');
+      debugDiv.id = 'svg-debug';
+      debugDiv.style.cssText = 'position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,0.8); color: white; padding: 10px; font-family: monospace; font-size: 12px; z-index: 10000;';
+      debugDiv.textContent = `Objects: ${svgObjects.size} (2D) | SVGLoader: ${!!window.THREE.SVGLoader}`;
+      document.body.appendChild(debugDiv);
     } catch (error) {
       console.error('[SVGScene] Error initializing SVG objects:', error);
     }
@@ -123,15 +129,20 @@ export function SVGScene() {
 
       // 使用 untrack 避免在渲染循环中触发响应式追踪
       untrack(() => {
-        // 可以在这里添加动画效果
-        // 例如：轻微的悬浮动画
+        // 添加轻微的悬浮动画
         svgObjects.forEach((obj, id) => {
           const storePos = objectStore.objects[id]?.position;
           if (storePos) {
             // 添加轻微的悬浮效果
             const floatOffset = Math.sin(time * 2 + getPositionIndex(id) * 0.5) * 0.05;
+
+            // 更新 mesh 位置
             obj.mesh.position.z = floatOffset;
+
+            // 更新 hitPlane 位置
             obj.hitPlane.position.z = floatOffset;
+
+            // 更新 outlineMesh 位置
             obj.outlineMesh.position.z = floatOffset;
           }
         });
@@ -147,8 +158,7 @@ export function SVGScene() {
    * 获取对象索引（用于动画相位偏移）
    */
   function getPositionIndex(id: string): number {
-    const order = ['v', 'b', 'o', 't', 'flower', 'bot'];
-    return order.indexOf(id);
+    return SVG_OBJECT_IDS.indexOf(id as any);
   }
 
   /**

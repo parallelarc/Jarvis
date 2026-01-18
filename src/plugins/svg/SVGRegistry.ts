@@ -27,9 +27,12 @@ export const SVG_ASSETS: SVGAsset[] = [
   { id: 'bot', name: 'Robot', path: '/assets/bot.svg' },
 ];
 
+export const SVG_OBJECT_IDS = ['v', 'b', 'o', 't', 'flower', 'bot'] as const;
+
 export class SVGRegistry {
   private static textures: Map<string, THREE.Texture> = new Map();
   private static sizes: Map<string, SVGSize> = new Map();
+  private static shapes: Map<string, THREE.Shape[]> = new Map();
 
   /**
    * 从 SVG 文本中解析原始尺寸
@@ -62,6 +65,43 @@ export class SVGRegistry {
   }
 
   /**
+   * 解析 SVG 路径为 THREE.Shape 数组
+   * 使用 SVGLoader 将 SVG 路径数据转换为可拉伸的 3D 形状
+   */
+  private static parseSVGPaths(svgText: string): THREE.Shape[] {
+    const THREE = window.THREE as any;
+    const SVGLoader = THREE.SVGLoader;
+
+    if (!SVGLoader) {
+      console.warn('[SVGRegistry] SVGLoader not available, 3D objects will not work');
+      return [];
+    }
+
+    try {
+      const loader = new SVGLoader();
+      const data = loader.parse(svgText);
+
+      console.log('[SVGRegistry] SVG parsed:', {
+        pathCount: data.paths.length,
+        paths: data.paths.map((p: any) => ({ subPaths: p.subPaths?.length, userData: p.userData }))
+      });
+
+      const shapes: THREE.Shape[] = [];
+      data.paths.forEach((path: any, index: number) => {
+        const pathShapes = path.toShapes(true, false);
+        console.log(`[SVGRegistry] Path ${index} produced ${pathShapes.length} shapes`);
+        shapes.push(...pathShapes);
+      });
+
+      console.log(`[SVGRegistry] Total shapes extracted: ${shapes.length}`);
+      return shapes;
+    } catch (error) {
+      console.error('[SVGRegistry] Error parsing SVG paths:', error);
+      return [];
+    }
+  }
+
+  /**
    * 将 SVG 转换为 DataURL
    */
   private static async svgToDataURL(svgText: string): Promise<string> {
@@ -89,6 +129,10 @@ export class SVGRegistry {
       // 解析并存储 SVG 原始尺寸
       const size = this.parseSVGSize(svgText);
       this.sizes.set(asset.id, size);
+
+      // 解析并存储 SVG 路径数据（用于 3D 拉伸对象）
+      const shapes = this.parseSVGPaths(svgText);
+      this.shapes.set(asset.id, shapes);
 
       const dataUrl = await this.svgToDataURL(svgText);
 
@@ -135,12 +179,20 @@ export class SVGRegistry {
   }
 
   /**
+   * 获取对象的 Shape 数据（用于 3D 拉伸对象）
+   */
+  static getShapes(id: string): THREE.Shape[] {
+    return this.shapes.get(id) || [];
+  }
+
+  /**
    * 释放所有纹理资源
    */
   static dispose(): void {
     this.textures.forEach(texture => texture.dispose());
     this.textures.clear();
     this.sizes.clear();
+    this.shapes.clear();
   }
 
   /**
@@ -153,5 +205,6 @@ export class SVGRegistry {
       this.textures.delete(id);
     }
     this.sizes.delete(id);
+    this.shapes.delete(id);
   }
 }

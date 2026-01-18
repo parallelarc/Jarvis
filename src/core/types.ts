@@ -48,8 +48,6 @@ export type HandState = {
 // 粒子相关类型
 // ============================================================================
 
-export const PARTICLE_COUNT = 2000;
-
 export type ParticlePosition = Float32Array;  // [x, y, z, x, y, z, ...]
 export type ParticleColor = Float32Array;     // [r, g, b, r, g, b, ...]
 
@@ -59,23 +57,6 @@ export type AnimationState =
   | 'forming'
   | 'text'
   | 'recovering';
-
-export type Ripple = {
-  contactPoint: Vector3D;
-  color: Color;
-  startTime: number;
-};
-
-// ============================================================================
-// 插件相关类型
-// ============================================================================
-
-export type ShapeGenerator = (count: number, time: number, ...args: unknown[]) => ParticlePosition;
-
-export type EffectApplicator = (
-  positions: ParticlePosition,
-  colors: ParticleColor
-) => boolean;  // returns isActive
 
 // ============================================================================
 // 配置相关类型
@@ -114,24 +95,6 @@ export type CameraConfig = {
   CAMERA_FAR: number;
   CAMERA_Z: number;
 };
-
-// ============================================================================
-// 事件相关类型
-// ============================================================================
-
-export type EventType =
-  | 'hand:detected'
-  | 'hand:lost'
-  | 'gesture:pointing'
-  | 'gesture:waving'
-  | 'particle:exploded'
-  | 'animation:changed'
-  | 'interaction:drag-start'
-  | 'interaction:drag-end'
-  | 'interaction:zoom-start'
-  | 'interaction:zoom-end';
-
-export type EventCallback<T = unknown> = (data: T) => void;
 
 // ============================================================================
 // Three.js 类型声明

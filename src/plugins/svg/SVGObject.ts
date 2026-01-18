@@ -5,47 +5,8 @@
 
 import type * as THREE from 'three';
 import type { SVGSize } from './SVGRegistry';
-
-/**
- * 创建蓝色轮廓纹理（Affinity 风格）
- */
-function createOutlineTexture(): THREE.Texture {
-  const canvas = document.createElement('canvas');
-  const size = 512;
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d')!;
-
-  // 清空画布
-  ctx.clearRect(0, 0, size, size);
-
-  // 绘制蓝色边框轮廓
-  const borderWidth = 16;
-  const cornerRadius = 32;
-  const padding = borderWidth / 2;
-
-  ctx.strokeStyle = '#4A90E2';
-  ctx.lineWidth = borderWidth;
-  ctx.lineJoin = 'round';
-
-  // 绘制圆角矩形边框
-  ctx.beginPath();
-  ctx.moveTo(padding + cornerRadius, padding);
-  ctx.lineTo(size - padding - cornerRadius, padding);
-  ctx.quadraticCurveTo(size - padding, padding, size - padding, padding + cornerRadius);
-  ctx.lineTo(size - padding, size - padding - cornerRadius);
-  ctx.quadraticCurveTo(size - padding, size - padding, size - padding - cornerRadius, size - padding);
-  ctx.lineTo(padding + cornerRadius, size - padding);
-  ctx.quadraticCurveTo(padding, size - padding, padding, size - padding - cornerRadius);
-  ctx.lineTo(padding, padding + cornerRadius);
-  ctx.quadraticCurveTo(padding, padding, padding + cornerRadius, padding);
-  ctx.closePath();
-  ctx.stroke();
-
-  const texture = new (window.THREE as any).CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
-}
+import { createOutlineTexture } from '@/utils/texture';
+import { INTERACTION_CONFIG } from '@/config';
 
 export interface SVGObjectConfig {
   id: string;
@@ -64,7 +25,8 @@ export class SVGObject {
   private originalSize: SVGSize;  // 存储原始尺寸
   private aspectX: number;  // 宽高比（已归一化）
   private aspectY: number;  // 宽高比（已归一化）
-  private outlineMesh: THREE.Sprite;
+  public outlineMesh: THREE.Sprite;  // 改为 public，供 SVGScene 访问
+  private bboxHelper: THREE.Box3Helper | null = null;  // 调试模式下的 bbox 可视化
 
   constructor(config: SVGObjectConfig) {
     this.id = config.id;
@@ -120,7 +82,11 @@ export class SVGObject {
 
     this.outlineMesh = new THREE.Sprite(outlineMaterial);
     this.outlineMesh.position.copy(config.position);
-    this.outlineMesh.scale.set(this.baseScale * this.aspectX * 1.15, this.baseScale * this.aspectY * 1.15, 1);
+    this.outlineMesh.scale.set(
+      this.baseScale * this.aspectX * INTERACTION_CONFIG.OUTLINE_SCALE_MULTIPLIER,
+      this.baseScale * this.aspectY * INTERACTION_CONFIG.OUTLINE_SCALE_MULTIPLIER,
+      1
+    );
     this.outlineMesh.renderOrder = -1; // 在主 sprite 之前渲染
   }
 
@@ -131,16 +97,21 @@ export class SVGObject {
     this.mesh.position.copy(position);
     this.hitPlane.position.copy(position);
     this.outlineMesh.position.copy(position);
+    // 同步更新 bbox helper（如果存在）
+    if (this.bboxHelper) {
+      const bounds = this.getBounds();
+      this.bboxHelper.box = bounds;
+    }
   }
 
   /**
-   * 更新缩放
+   * 更新缩放（带 clamp 限制）
    */
   updateScale(scale: number): void {
-    const clampedScale = Math.max(0.2, Math.min(5.0, scale));
-    this.mesh.scale.set(clampedScale * this.aspectX, clampedScale * this.aspectY, 1);
-    this.hitPlane.scale.set(clampedScale * this.aspectX, clampedScale * this.aspectY, 1);
-    this.outlineMesh.scale.set(clampedScale * this.aspectX * 1.15, clampedScale * this.aspectY * 1.15, 1);
+    this.setScale(Math.max(
+      INTERACTION_CONFIG.SCALE_MIN,
+      Math.min(INTERACTION_CONFIG.SCALE_MAX, scale)
+    ));
   }
 
   /**
@@ -149,7 +120,11 @@ export class SVGObject {
   setScale(scale: number): void {
     this.mesh.scale.set(scale * this.aspectX, scale * this.aspectY, 1);
     this.hitPlane.scale.set(scale * this.aspectX, scale * this.aspectY, 1);
-    this.outlineMesh.scale.set(scale * this.aspectX * 1.15, scale * this.aspectY * 1.15, 1);
+    this.outlineMesh.scale.set(
+      scale * this.aspectX * INTERACTION_CONFIG.OUTLINE_SCALE_MULTIPLIER,
+      scale * this.aspectY * INTERACTION_CONFIG.OUTLINE_SCALE_MULTIPLIER,
+      1
+    );
   }
 
   /**
@@ -207,6 +182,29 @@ export class SVGObject {
   }
 
   /**
+   * 显示/隐藏调试模式的 bbox
+   */
+  showDebugBounds(show: boolean, scene: THREE.Scene): void {
+    const THREE = window.THREE as any;
+
+    if (show && !this.bboxHelper) {
+      const bounds = this.getBounds();
+      this.bboxHelper = new THREE.Box3Helper(
+        bounds,
+        new THREE.Color(0x00ff00)  // 绿色
+      );
+      scene.add(this.bboxHelper);
+    } else if (!show && this.bboxHelper) {
+      scene.remove(this.bboxHelper);
+      this.bboxHelper = null;
+    } else if (show && this.bboxHelper) {
+      // 更新 bbox 位置（对象移动后）
+      const bounds = this.getBounds();
+      this.bboxHelper.box = bounds;
+    }
+  }
+
+  /**
    * 重置到初始位置
    */
   reset(): void {
@@ -225,5 +223,9 @@ export class SVGObject {
     this.hitPlane.material.dispose();
     this.outlineMesh.material.dispose();
     (this.outlineMesh.material.map as any)?.dispose();
+    // 清理 bbox helper
+    if (this.bboxHelper) {
+      this.bboxHelper.dispose();
+    }
   }
 }

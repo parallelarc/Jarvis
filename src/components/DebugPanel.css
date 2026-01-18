@@ -239,3 +239,27 @@
   background: rgba(239, 68, 68, 0.3);
   border-color: rgba(239, 68, 68, 0.6);
 }
+
+/* Toggle button for debug options */
+.debug-toggle-btn {
+  padding: 4px 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  font-family: monospace;
+  font-size: 10px;
+  transition: all 0.2s;
+}
+
+.debug-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.debug-toggle-btn.active {
+  background: rgba(74, 222, 128, 0.2);
+  border-color: rgba(74, 222, 128, 0.5);
+  color: #4ade80;
+}
