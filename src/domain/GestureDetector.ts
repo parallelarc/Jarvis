@@ -14,7 +14,7 @@
  */
 
 import type { Vector3D, Landmarks, HandSide } from '@/core/types';
-import { GESTURE_DETECTION_CONFIG } from '@/config';
+import { GESTURE_DETECTION_CONFIG, GESTURE_CONFIG } from '@/config';
 import { calculateDistance } from '@/utils/math';
 
 // ========== 类型定义 ==========
@@ -287,7 +287,7 @@ export function isThumbPinching(
   finger: PinchingFinger
 ): boolean {
   return calculateDistance(landmarks[4], landmarks[FINGER_PINCH_INDICES[finger]])
-    < GESTURE_DETECTION_CONFIG.PINCH_THRESHOLD;
+    < GESTURE_CONFIG.PINCH_THRESHOLD;
 }
 
 /**

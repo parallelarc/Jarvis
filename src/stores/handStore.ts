@@ -4,6 +4,7 @@
 
 import { createStore, produce, reconcile } from 'solid-js/store';
 import type { HandState, HandSide, Vector3D, Landmarks } from '@/core/types';
+import type { FingersExtended } from '@/domain/GestureDetector';
 
 /**
  * 扩展的手部状态 - 包含拖拽偏移和手势
@@ -12,13 +13,7 @@ export type ExtendedHandState = HandState & {
   dragOffset?: Vector3D;
   isDragging: boolean;
   currentGesture: string | null;
-  fingersExtended?: {
-    thumb: boolean;
-    index: boolean;
-    middle: boolean;
-    ring: boolean;
-    pinky: boolean;
-  };
+  fingersExtended?: FingersExtended;
   palmDirection?: 'up' | 'down' | 'left' | 'right' | 'camera' | 'away';
   pinchingFinger?: 'index' | 'middle' | 'ring' | 'pinky' | null;
   // 点击检测状态
@@ -46,6 +41,7 @@ function createInitialHandState(side: HandSide): ExtendedHandState {
       middle: false,
       ring: false,
       pinky: false,
+      extendedCount: 0,
     },
     palmDirection: undefined,
     pinchingFinger: null,
@@ -156,7 +152,7 @@ export const handActions = {
   setGesture(
     side: HandSide,
     gesture: string | null,
-    fingers?: { thumb: boolean; index: boolean; middle: boolean; ring: boolean; pinky: boolean },
+    fingers?: FingersExtended,
     palmDirection?: 'up' | 'down' | 'left' | 'right' | 'camera' | 'away',
     pinchingFinger?: 'index' | 'middle' | 'ring' | 'pinky' | null
   ) {

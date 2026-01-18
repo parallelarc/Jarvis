@@ -33,16 +33,6 @@ export const SPREAD_CONFIG = {
 } as const;
 
 // ============================================================================
-// 涟漪效果配置
-// ============================================================================
-
-export const RIPPLE_CONFIG = {
-  RIPPLE_DURATION: 2000,
-  RIPPLE_EXPANSION_SPEED: 0.005,
-  RIPPLE_WIDTH: 0.5,
-} as const;
-
-// ============================================================================
 // 颜色配置
 // ============================================================================
 
@@ -97,7 +87,6 @@ export const VIEW_CONFIG = {
 
 export const GESTURE_DETECTION_CONFIG = {
   FINGER_EXTENDED_RATIO: 1.2,
-  PINCH_THRESHOLD: 0.08,  // 与 GESTURE_CONFIG.PINCH_THRESHOLD 相同
   OK_THRESHOLD: 0.06,
   WAVE_SPEED_THRESHOLD: 0.03,
   WAVE_COUNT_THRESHOLD: 3,
@@ -121,19 +110,3 @@ export const INTERACTION_CONFIG = {
   SCALE_MAX: 5.0,
   OUTLINE_SCALE_MULTIPLIER: 1.15,
 } as const;
-
-// ============================================================================
-// 导出合并的配置（向后兼容）
-// ============================================================================
-
-export const CONFIG = {
-  ...PARTICLE_CONFIG,
-  ...GESTURE_CONFIG,
-  ...SPREAD_CONFIG,
-  ...RIPPLE_CONFIG,
-  ...COLOR_CONFIG,
-  ...CAMERA_CONFIG,
-  CONNECTIONS: HAND_CONNECTIONS,
-} as const;
-
-export const VIEW = VIEW_CONFIG;

@@ -5,7 +5,6 @@
 import { createSignal, createMemo, Show, For } from 'solid-js';
 import { handStore } from '@/stores/handStore';
 import { objectStore, objectActions } from '@/stores/objectStore';
-import { animationStore } from '@/stores/animationStore';
 import './DebugPanel.css';
 
 // 全局可见状态
@@ -35,8 +34,6 @@ export function DebugPanel() {
   // 分别订阅对象状态的各个字段
   const selectedObjectId = createMemo(() => objectStore.selectedObjectId);
   const objects = createMemo(() => objectStore.objects);
-
-  const animation = createMemo(() => animationStore);
 
   // 计算双手距离
   const handsDistance = createMemo(() => {
@@ -219,25 +216,6 @@ export function DebugPanel() {
                 Reset All
               </button>
             </div>
-
-            {/* 动画状态 */}
-            <div class="debug-section">
-              <h3>Animation</h3>
-              <div class="debug-row">
-                <span>State:</span>
-                <span class="debug-value">{animation().current}</span>
-              </div>
-              <div class="debug-row">
-                <span>Hello Waving:</span>
-                <span class={animation().helloWavingActive ? 'debug-value yes' : 'debug-value no'}>
-                  {animation().helloWavingActive ? 'Yes' : 'No'}
-                </span>
-              </div>
-              <div class="debug-row">
-                <span>Text:</span>
-                <span class="debug-value">"{animation().text}"</span>
-              </div>
-            </div>
           </div>
         </div>
       </Show>
@@ -323,7 +301,7 @@ function HandInfo(props: { hand: typeof handStore.left | typeof handStore.right 
         <div class="debug-row">
           <span>Has Landmarks:</span>
           <span class={hand().landmarks ? 'debug-value yes' : 'debug-value no'}>
-            {hand().landmarks ? 'Yes (' + hand().landmarks.length + ')' : 'No'}
+            {hand().landmarks ? `Yes (${hand().landmarks!.length})` : 'No'}
           </span>
         </div>
         <Show when={hand().dragOffset}>

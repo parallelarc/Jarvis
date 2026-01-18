@@ -32,41 +32,37 @@ function getSceneAPI(): SVGSceneAPI | undefined {
 }
 
 /**
- * 通用 SVG 对象操作辅助函数
- * 封装了获取 API、获取对象、执行操作的三步模式
- *
- * @param id - SVG 对象 ID
- * @param operation - 要对对象执行的操作函数
- * @param fallback - 操作失败时的返回值
- * @returns 操作结果或 fallback 值
- */
-function withSVGObject<T>(
-  id: string,
-  operation: (obj: SVGObject) => T,
-  fallback: T
-): T {
-  const sceneAPI = getSceneAPI();
-  if (!sceneAPI) return fallback;
-
-  const svgObjects = sceneAPI.getSVGObjects();
-  if (!svgObjects) return fallback;
-
-  const svgObj = svgObjects.get(id) as SVGObject | undefined;
-  return svgObj ? operation(svgObj) : fallback;
-}
-
-/**
  * 同步更新 SVG 对象位置
  */
 export function syncSVGObjectPosition(id: string, position: Vector3D): boolean {
-  return withSVGObject(id, obj => { obj.updatePosition(position); return true; }, false);
+  const sceneAPI = getSceneAPI();
+  if (!sceneAPI) return false;
+
+  const svgObjects = sceneAPI.getSVGObjects();
+  if (!svgObjects) return false;
+
+  const svgObj = svgObjects.get(id) as SVGObject | undefined;
+  if (!svgObj) return false;
+
+  svgObj.updatePosition(position);
+  return true;
 }
 
 /**
  * 同步更新 SVG 对象缩放
  */
 export function syncSVGObjectScale(id: string, scale: number): boolean {
-  return withSVGObject(id, obj => { obj.setScale(scale); return true; }, false);
+  const sceneAPI = getSceneAPI();
+  if (!sceneAPI) return false;
+
+  const svgObjects = sceneAPI.getSVGObjects();
+  if (!svgObjects) return false;
+
+  const svgObj = svgObjects.get(id) as SVGObject | undefined;
+  if (!svgObj) return false;
+
+  svgObj.setScale(scale);
+  return true;
 }
 
 /**
@@ -83,7 +79,14 @@ export function syncSVGObjectSelected(id: string, selected: boolean): boolean {
   }
 
   // 回退到旧 API（兼容性）
-  return withSVGObject(id, obj => { obj.setSelected(selected); return true; }, false);
+  const svgObjects = sceneAPI.getSVGObjects();
+  if (!svgObjects) return false;
+
+  const svgObj = svgObjects.get(id) as SVGObject | undefined;
+  if (!svgObj) return false;
+
+  svgObj.setSelected(selected);
+  return true;
 }
 
 /**
