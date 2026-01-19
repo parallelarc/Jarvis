@@ -6,6 +6,7 @@
 import { createStore, produce } from 'solid-js/store';
 import type { Vector3D } from '@/core/types';
 import { INTERACTION_CONFIG } from '@/config';
+import { syncSVGObjectPosition, syncAllSVGObjectsSelected } from '@/utils/three-sync';
 
 export interface ObjectState {
   position: Vector3D;
@@ -17,6 +18,7 @@ export interface ObjectState {
 export type ObjectStoreState = {
   selectedObjectId: string | null;
   objects: Record<string, ObjectState>;
+  initialPositions: Record<string, Vector3D>;
 };
 
 const initialObjects: Record<string, ObjectState> = {
@@ -31,16 +33,10 @@ const initialObjects: Record<string, ObjectState> = {
 const initialState: ObjectStoreState = {
   selectedObjectId: null,
   objects: initialObjects,
+  initialPositions: {},
 };
 
 export const [objectStore, setObjectStore] = createStore(initialState);
-
-/**
- * 获取当前状态（用于 actions 内部访问）
- */
-function getState(): ObjectStoreState {
-  return objectStore;
-}
 
 /**
  * Actions - 状态更新函数
@@ -102,14 +98,25 @@ export const objectActions = {
    */
   resetAllObjects() {
     const resetState: Record<string, ObjectState> = {};
+    const initialPositions = objectStore.initialPositions;
+
     Object.keys(initialObjects).forEach(id => {
+      // 使用保存的初始位置，如果没有则使用默认 (0, 0, 0)
+      const initialPos = initialPositions[id] || { x: 0, y: 0, z: 0 };
       resetState[id] = {
-        position: { x: 0, y: 0, z: 0 },
+        position: { ...initialPos },
         scale: 1.0,
         rotation: 0,
         selected: false,
       };
+
+      // 同步到 Three.js 场景
+      syncSVGObjectPosition(id, initialPos);
     });
+
+    // 取消所有选中高亮
+    syncAllSVGObjectsSelected(false);
+
     setObjectStore({ selectedObjectId: null, objects: resetState });
   },
 
@@ -117,6 +124,10 @@ export const objectActions = {
    * 设置多个对象的初始位置（用于初始化）
    */
   setInitialPositions(positions: Record<string, Vector3D>) {
+    // 保存初始位置供 reset 使用
+    setObjectStore('initialPositions', { ...positions });
+
+    // 同时更新当前对象位置
     Object.entries(positions).forEach(([id, pos]) => {
       setObjectStore('objects', id, 'position', { ...pos });
     });

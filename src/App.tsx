@@ -26,9 +26,6 @@ export default function App() {
 
       {/* 调试面板 */}
       <DebugPanel />
-
-      {/* 状态指示 */}
-      <div class="status">{status()}</div>
     </>
   );
 }

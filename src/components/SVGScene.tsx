@@ -7,7 +7,7 @@ import { onMount, onCleanup, untrack } from 'solid-js';
 import { objectStore, objectActions } from '@/stores/objectStore';
 import { SVGRegistry, SVG_OBJECT_IDS } from '@/plugins/svg/SVGRegistry';
 import { SVGObject } from '@/plugins/svg/SVGObject';
-import { CAMERA_CONFIG } from '@/config';
+import { CAMERA_CONFIG, SVG_LAYOUT_CONFIG, SVG_POSITION_CONFIG } from '@/config';
 
 export function SVGScene() {
   let sceneRef: HTMLDivElement | undefined;
@@ -19,12 +19,19 @@ export function SVGScene() {
   // SVG 对象集合
   const svgObjects = new Map<string, SVGObject>();
 
-  // 布局配置
-  const LAYOUT_CONFIG = {
-    initialY: -1.5,      // 距底部 1/3 位置
-    spacing: 1.5,        // 对象间距
-    baseScale: 1.0,      // 基础缩放
-  };
+  // 设计画布尺寸（用于尺寸换算）
+  const DESIGN_CANVAS_WIDTH = 1920;
+  const WORLD_WIDTH = 10;  // Three.js 世界坐标宽度范围 (-5 到 +5)
+
+  /**
+   * 根据设计宽度计算 baseScale
+   * worldWidth = baseScale * aspectX
+   * baseScale = worldWidth / aspectX
+   */
+  function calculateBaseScale(designWidth: number, aspectX: number): number {
+    const worldWidth = designWidth / DESIGN_CANVAS_WIDTH * WORLD_WIDTH;
+    return worldWidth / aspectX;
+  }
 
   /**
    * 初始化 Three.js 场景
@@ -69,35 +76,44 @@ export function SVGScene() {
       const textures = await SVGRegistry.loadAllTextures();
       const THREE = window.THREE as any;
 
-      // 计算起始位置（居中排列）
-      const startX = -((textures.length - 1) * LAYOUT_CONFIG.spacing) / 2;
-
       // 收集初始位置
       const initialPositions: Record<string, { x: number; y: number; z: number }> = {};
 
       textures.forEach((texture: any, index: number) => {
         const id = SVG_OBJECT_IDS[index];
-        const position = new THREE.Vector3(
-          startX + index * LAYOUT_CONFIG.spacing,
-          LAYOUT_CONFIG.initialY,
-          0
-        );
+        const layout = SVG_LAYOUT_CONFIG[id];
+        const posConfig = SVG_POSITION_CONFIG[id];
 
-        // 使用 2D Sprite
-        const originalSize = SVGRegistry.getSize(id);
+        // 使用配置文件中的位置，如果没有配置则使用默认值
+        const x = posConfig?.x ?? (index - 2.5) * 1.5;
+        const y = posConfig?.y ?? -1.5;
+        const position = new THREE.Vector3(x, y, 0);
+
+        // 获取原始尺寸用于计算宽高比
+        const originalSize = SVGRegistry.getSize(id) ?? { width: 1, height: 1 };
+        const maxDim = Math.max(originalSize.width, originalSize.height);
+        const aspectX = originalSize.width / maxDim;
+
+        // 根据 size_rule.md 中的设计宽度计算 baseScale
+        const baseScale = layout
+          ? calculateBaseScale(layout.width, aspectX)
+          : 1.0;
+
         const shapes = SVGRegistry.getShapes(id);
         const svgObj = new SVGObject({
           id,
           texture,
           position,
-          baseScale: LAYOUT_CONFIG.baseScale,
+          baseScale,
           originalSize,
-          shapes,  // 传入 shapes 用于计算精确的内容边界
+          shapes,
         });
 
         svgObjects.set(id, svgObj);
         scene.add(svgObj.mesh);
         scene.add(svgObj.hitPlane);
+
+        console.log(`[SVGScene] ${id}: pos=(${x.toFixed(2)}, ${y.toFixed(2)}) baseScale=${baseScale.toFixed(2)}`);
 
         // 收集初始位置用于 store 更新
         initialPositions[id] = { x: position.x, y: position.y, z: position.z };
@@ -106,14 +122,7 @@ export function SVGScene() {
       // 批量更新 store 中的初始位置
       objectActions.setInitialPositions(initialPositions);
 
-      console.log(`[SVGScene] Initialized ${svgObjects.size} SVG objects (2D mode)`);
-
-      // 显示调试信息在页面上
-      const debugDiv = document.createElement('div');
-      debugDiv.id = 'svg-debug';
-      debugDiv.style.cssText = 'position: fixed; top: 10px; left: 10px; background: rgba(0,0,0,0.8); color: white; padding: 10px; font-family: monospace; font-size: 12px; z-index: 10000;';
-      debugDiv.textContent = `Objects: ${svgObjects.size} (2D) | SVGLoader: ${!!window.THREE.SVGLoader}`;
-      document.body.appendChild(debugDiv);
+      console.log(`[SVGScene] Initialized ${svgObjects.size} SVG objects with custom sizes`);
     } catch (error) {
       console.error('[SVGScene] Error initializing SVG objects:', error);
     }

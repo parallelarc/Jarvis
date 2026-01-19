@@ -110,3 +110,63 @@ export const INTERACTION_CONFIG = {
   SCALE_MAX: 5.0,
   OUTLINE_SCALE_MULTIPLIER: 1.15,
 } as const;
+
+// ============================================================================
+// SVG 对象布局配置
+// 来源: size_rule.md - 基于 1920x1080 背景的设计尺寸
+// 世界坐标范围: -5 到 +5 (总宽 10 单位)
+// 比例换算: width / 1920 * 10 = 世界坐标宽度
+// ============================================================================
+
+export interface SVGLayoutItem {
+  x: number;     // 在 1920x1080 画布中的 x 坐标
+  y: number;     // 在 1920x1080 画布中的 y 坐标
+  width: number;  // SVG 宽度
+  height: number; // SVG 高度
+}
+
+// 尺寸配置：基于 1920x1080 画布的设计尺寸
+export const SVG_LAYOUT_CONFIG: Record<string, SVGLayoutItem> = {
+  v: { x: 53.7, y: 783.6, width: 291.8, height: 238.5 },
+  b: { x: 358.6, y: 697.8, width: 261, height: 327.9 },
+  o: { x: 634.7, y: 783.6, width: 249.1, height: 242.2 },
+  t: { x: 889.7, y: 697.8, width: 152.7, height: 327.7 },
+  flower: { x: 1094.7, y: 659.7, width: 376.8, height: 365.8 },
+  bot: { x: 1511.1, y: 665.1, width: 352.3, height: 360.4 },
+} as const;
+
+/**
+ * 将设计坐标 (1920x1080) 转换为世界坐标 (-5 到 +5)
+ * 设计坐标: 原点在左上角，X 向右，Y 向下
+ * 世界坐标: 原点在中心，X 向右，Y 向上
+ *
+ * 注意：size_rule.md 中的 (x, y) 是 SVG 的左上角，需要转换为 SVG 中心点
+ */
+function designToWorld(designX: number, designY: number, width: number, height: number): { x: number; y: number } {
+  const DESIGN_WIDTH = 1920;
+  const DESIGN_HEIGHT = 1080;
+  const WORLD_WIDTH = 10;  // -5 到 +5
+  const WORLD_HEIGHT = WORLD_WIDTH * (DESIGN_HEIGHT / DESIGN_WIDTH);  // 5.625
+
+  // 将 SVG 左上角坐标转换为中心点坐标
+  const centerX = designX + width / 2;
+  const centerY = designY + height / 2;
+
+  // X: (centerX - canvasCenter) / canvasWidth * worldWidth
+  const worldX = (centerX - DESIGN_WIDTH / 2) / DESIGN_WIDTH * WORLD_WIDTH;
+  // Y: 反转 Y 轴 (canvasCenterY - centerY) / canvasHeight * worldHeight
+  const worldY = (DESIGN_HEIGHT / 2 - centerY) / DESIGN_HEIGHT * WORLD_HEIGHT;
+
+  return { x: Math.round(worldX * 100) / 100, y: Math.round(worldY * 100) / 100 };
+}
+
+/**
+ * 自动生成位置配置：从设计坐标转换为世界坐标
+ * 只需修改 SVG_LAYOUT_CONFIG，这里会自动计算
+ */
+export const SVG_POSITION_CONFIG: Record<string, { x: number; y: number }> = Object.fromEntries(
+  Object.entries(SVG_LAYOUT_CONFIG).map(([id, layout]) => [
+    id,
+    designToWorld(layout.x, layout.y, layout.width, layout.height),
+  ])
+);
