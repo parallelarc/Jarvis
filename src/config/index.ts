@@ -170,3 +170,23 @@ export const SVG_POSITION_CONFIG: Record<string, { x: number; y: number }> = Obj
     designToWorld(layout.x, layout.y, layout.width, layout.height),
   ])
 );
+
+// ============================================================================
+// 动态背景配置
+// ============================================================================
+
+export const DYNAMIC_BACKGROUND_CONFIG = {
+  // 主色调（保持原有橙色）
+  PRIMARY_COLOR: { r: 250/255, g: 104/255, b: 55/255 },
+  // 辅助暖黄色（高光部分）- 增强亮度，接近米白色
+  SECONDARY_COLOR: { r: 255/255, g: 240/255, b: 200/255 },
+  // 暗部颜色（边缘阴影）- 加深，接近深红褐色
+  SHADOW_COLOR: { r: 120/255, g: 40/255, b: 20/255 },
+
+  // 动画速度（越小越慢）
+  TIME_SCALE: 5,
+
+  // 几何配置
+  PLANE_Z: -1,  // 背景平面在 SVG 对象后面
+  PLANE_SIZE: 25,  // 覆盖整个视野
+} as const;

@@ -8,6 +8,7 @@ import { objectStore, objectActions } from '@/stores/objectStore';
 import { SVGRegistry, SVG_OBJECT_IDS } from '@/plugins/svg/SVGRegistry';
 import { SVGObject } from '@/plugins/svg/SVGObject';
 import { CAMERA_CONFIG, SVG_LAYOUT_CONFIG, SVG_POSITION_CONFIG } from '@/config';
+import { DynamicBackground } from '@/plugins/background/DynamicBackground';
 
 export function SVGScene() {
   let sceneRef: HTMLDivElement | undefined;
@@ -18,6 +19,9 @@ export function SVGScene() {
 
   // SVG 对象集合
   const svgObjects = new Map<string, SVGObject>();
+
+  // 动态背景
+  let dynamicBackground: DynamicBackground | null = null;
 
   // 设计画布尺寸（用于尺寸换算）
   const DESIGN_CANVAS_WIDTH = 1920;
@@ -60,6 +64,9 @@ export function SVGScene() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setClearColor(0x000000, 0);
     sceneRef.appendChild(renderer.domElement);
+
+    // 创建动态背景
+    dynamicBackground = new DynamicBackground(scene);
 
     // 初始化 SVG 对象
     initSVGObjects();
@@ -132,13 +139,24 @@ export function SVGScene() {
    * 渲染循环
    */
   function startRenderLoop() {
+    let lastTime = Date.now();
+
     const render = () => {
       animationFrameId = requestAnimationFrame(render);
 
-      const time = Date.now() * 0.001;
+      const now = Date.now();
+      const deltaTime = (now - lastTime) / 1000;
+      lastTime = now;
+
+      const time = now * 0.001;
 
       // 使用 untrack 避免在渲染循环中触发响应式追踪
       untrack(() => {
+        // 更新动态背景
+        if (dynamicBackground) {
+          dynamicBackground.update(deltaTime);
+        }
+
         // 添加轻微的悬浮动画
         svgObjects.forEach((obj, id) => {
           const storePos = objectStore.objects[id]?.position;
@@ -236,6 +254,11 @@ export function SVGScene() {
       cancelAnimationFrame(animationFrameId);
     }
     window.removeEventListener('resize', handleResize);
+
+    // 释放动态背景资源
+    if (dynamicBackground) {
+      dynamicBackground.dispose();
+    }
 
     // 释放 SVG 对象资源
     svgObjects.forEach(obj => obj.dispose());
