@@ -107,8 +107,10 @@ export function SVGScene() {
     try {
       const textures = await SVGRegistry.loadAllTextures();
 
-      // 收集初始位置
+      // 收集初始位置和旋转
       const initialPositions: Record<string, { x: number; y: number; z: number }> = {};
+      const initialRotations: Record<string, { x: number; y: number; z: number }> = {};
+      const initialScales: Record<string, number> = {};
 
       textures.forEach((texture: any, index: number) => {
         const id = SVG_OBJECT_IDS[index];
@@ -155,12 +157,30 @@ export function SVGScene() {
 
         console.log(`[SVGScene] ${id}: pos=(${x.toFixed(2)}, ${y.toFixed(2)}) baseScale=${baseScale.toFixed(2)}`);
 
-        // 收集初始位置用于 store 更新
-        initialPositions[id] = { x: position.x, y: position.y, z: position.z };
+        // 收集初始位置用于 store 更新（使用 Three.js mesh 的实际位置）
+        initialPositions[id] = {
+          x: svgObj.mesh.position.x,
+          y: svgObj.mesh.position.y,
+          z: svgObj.mesh.position.z
+        };
+
+        // 收集初始旋转（使用 Three.js mesh 的实际旋转）
+        initialRotations[id] = {
+          x: svgObj.mesh.rotation.x,
+          y: svgObj.mesh.rotation.y,
+          z: svgObj.mesh.rotation.z
+        };
+
+        // 收集初始缩放（使用 Three.js mesh 的实际 scale）
+        // 注意：mesh.scale.y 是负数，但我们在 store 中使用正数的世界坐标尺寸
+        // 读取 mesh.scale.x 作为基准（x 和 z 的绝对值应该相同）
+        initialScales[id] = 1.0; // 初始缩放始终为 1.0
       });
 
-      // 批量更新 store 中的初始位置
+      // 批量更新 store 中的初始位置和旋转
       objectActions.setInitialPositions(initialPositions);
+      objectActions.setInitialRotations(initialRotations);
+      objectActions.setInitialScales(initialScales);
 
       console.log(`[SVGScene] Initialized ${svgObjects.size} SVG objects with custom sizes`);
     } catch (error) {

@@ -20,6 +20,7 @@ import {
 import { processScaleInteraction } from '@/services/ZoomInteractionService';
 import { processRotationInteraction } from '@/services/RotationInteractionService';
 import { drawHands } from '@/services/HandDrawingService';
+import { autoResetService } from '@/services/AutoResetService';
 import type { Landmarks } from '@/core/types';
 
 export function useGestureTracking() {
@@ -139,11 +140,17 @@ export function useGestureTracking() {
       if (ctx) {
         drawHands(ctx, results);
       }
+
+      // 检查自动复位
+      autoResetService.checkHandsState();
     } else {
       setStatus('No hands detected');
       handActions.resetHands();
       // 重置选中状态并隐藏所有轮廓
       deselectAll();
+
+      // 检查自动复位（无手情况）
+      autoResetService.checkHandsState();
     }
   }
 

@@ -19,6 +19,8 @@ export type ObjectStoreState = {
   selectedObjectId: string | null;
   objects: Record<string, ObjectState>;
   initialPositions: Record<string, Vector3D>;
+  initialRotations: Record<string, Vector3D>;
+  initialScales: Record<string, number>;
 };
 
 const initialObjects: Record<string, ObjectState> = {
@@ -34,6 +36,8 @@ const initialState: ObjectStoreState = {
   selectedObjectId: null,
   objects: initialObjects,
   initialPositions: {},
+  initialRotations: {},
+  initialScales: {},
 };
 
 export const [objectStore, setObjectStore] = createStore(initialState);
@@ -133,14 +137,28 @@ export const objectActions = {
 
   /**
    * 设置多个对象的初始位置（用于初始化）
+   * 注意：此方法只保存初始值，不更新当前对象状态
    */
   setInitialPositions(positions: Record<string, Vector3D>) {
     // 保存初始位置供 reset 使用
     setObjectStore('initialPositions', { ...positions });
+  },
 
-    // 同时更新当前对象位置
-    Object.entries(positions).forEach(([id, pos]) => {
-      setObjectStore('objects', id, 'position', { ...pos });
-    });
+  /**
+   * 设置多个对象的初始旋转（用于初始化）
+   * 注意：此方法只保存初始值，不更新当前对象状态
+   */
+  setInitialRotations(rotations: Record<string, Vector3D>) {
+    // 保存初始旋转供 reset 使用
+    setObjectStore('initialRotations', { ...rotations });
+  },
+
+  /**
+   * 设置多个对象的初始缩放（用于初始化）
+   * 注意：此方法只保存初始值，不更新当前对象状态
+   */
+  setInitialScales(scales: Record<string, number>) {
+    // 保存初始缩放供 reset 使用
+    setObjectStore('initialScales', { ...scales });
   },
 };

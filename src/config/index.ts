@@ -207,3 +207,15 @@ export const DYNAMIC_BACKGROUND_CONFIG = {
   PLANE_Z: -1,  // 背景平面在 SVG 对象后面
   PLANE_SIZE: 25,  // 覆盖整个视野
 } as const;
+
+// ============================================================================
+// 自动复位配置
+// ============================================================================
+
+export type EasingType = 'linear' | 'easeInOut' | 'easeOut';
+
+export const AUTO_RESET_CONFIG = {
+  TIMEOUT_MS: 3000,              // 手离开画面后多久触发复位（3秒）
+  ANIMATION_DURATION_MS: 2000,   // 复位动画时长（2秒）
+  EASING_TYPE: 'easeInOut' as EasingType,  // 缓动曲线类型
+} as const;

@@ -413,10 +413,9 @@ export class SVGObject {
       const bounds = this.getBounds();
       this.bboxHelper.box = bounds;
     }
-    // 同步更新角点位置（如果可见）
-    if (this.isSelected) {
-      this.updateCornerDots();
-    }
+    // 始终更新角点位置，即使不可见
+    // 这样当对象重新被选中时，角点会出现在正确的位置
+    this.updateCornerDots();
   }
 
   /**
