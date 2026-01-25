@@ -1,0 +1,163 @@
+/**
+ * 旋转交互服务
+ * 负责左手捏合旋转 SVG 对象逻辑
+ */
+
+import { handStore } from '@/stores/handStore';
+import { objectStore, objectActions } from '@/stores/objectStore';
+import { GESTURE_CONFIG, ROTATION_CONFIG } from '@/config';
+import { normalizedToWorld, calculateDistance } from '@/utils/math';
+import { syncSVGObjectRotation } from '@/utils/three-sync';
+
+export interface RotationInteractionCallbacks {
+  setWasPinching: (side: 'Left' | 'Right', wasPinching: boolean) => void;
+  setPinching: (side: 'Left' | 'Right', isPinching: boolean, distance: number) => void;
+  setRotating: (side: 'Left' | 'Right', isRotating: boolean) => void;
+  setRotationBasePosition: (side: 'Left' | 'Right', position: { x: number; y: number; z: number }) => void;
+  setBaseRotation: (side: 'Left' | 'Right', rotation: { x: number; y: number; z: number }) => void;
+}
+
+/**
+ * 开始旋转
+ */
+function startRotating(
+  id: string,
+  palmCenter: { x: number; y: number },
+  callbacks: RotationInteractionCallbacks
+) {
+  const sceneAPI = (window as any).svgSceneAPI;
+  const camera = sceneAPI?.getCamera();
+  const handWorldPos = normalizedToWorld(
+    { x: palmCenter.x, y: palmCenter.y },
+    camera,
+    window.innerWidth,
+    window.innerHeight
+  );
+  const objState = objectStore.objects[id];
+
+  // 记录基准位置和基准旋转角度
+  callbacks.setRotationBasePosition('Left', {
+    x: handWorldPos.x,
+    y: handWorldPos.y,
+    z: handWorldPos.z || 0
+  });
+  callbacks.setBaseRotation('Left', {
+    x: objState.rotation.x,
+    y: objState.rotation.y,
+    z: objState.rotation.z || 0
+  });
+  callbacks.setRotating('Left', true);
+}
+
+/**
+ * 更新对象旋转（旋转中）
+ */
+function updateObjectRotation(id: string, palmCenter: { x: number; y: number }) {
+  const handState = handStore.left;
+  const sceneAPI = (window as any).svgSceneAPI;
+  const camera = sceneAPI?.getCamera();
+  const palmWorldPos = normalizedToWorld(
+    { x: palmCenter.x, y: palmCenter.y },
+    camera,
+    window.innerWidth,
+    window.innerHeight
+  );
+
+  const basePos = handState.rotationBasePosition;
+  const baseRotation = handState.baseRotation;
+
+  if (!basePos || !baseRotation) {
+    console.warn('[RotationInteraction] Missing base position or rotation');
+    return;
+  }
+
+  // 计算手掌位移
+  const deltaX = palmWorldPos.x - basePos.x;
+  const deltaY = palmWorldPos.y - basePos.y;
+
+  // 应用死区阈值
+  if (Math.abs(deltaX) < ROTATION_CONFIG.DEADZONE_THRESHOLD &&
+      Math.abs(deltaY) < ROTATION_CONFIG.DEADZONE_THRESHOLD) {
+    return;
+  }
+
+  // 映射位移到旋转角度（无极旋转，无角度限制）
+  // X轴位移 → Y轴旋转（左右转）
+  // Y轴位移 → X轴旋转（上下倾）
+  const newRotation = {
+    x: baseRotation.x + deltaY * ROTATION_CONFIG.POSITION_TO_ANGLE_RATIO,
+    y: baseRotation.y + deltaX * ROTATION_CONFIG.POSITION_TO_ANGLE_RATIO,
+    z: baseRotation.z,  // 保持 Z 轴旋转不变
+  };
+
+  objectActions.updateObjectRotation(id, newRotation);
+
+  // 同步更新 Three.js 对象
+  syncSVGObjectRotation(id, newRotation);
+}
+
+/**
+ * 处理旋转交互 - 左手捏合旋转
+ *
+ * 触发条件：
+ * - 左手捏合（拇指+食指）
+ * - 有对象被右手选中
+ *
+ * 旋转方式：
+ * - 手掌左右移动 → Y 轴旋转（左右转）
+ * - 手掌上下移动 → X 轴旋转（上下倾）
+ * - 支持 360° 无极旋转（无角度限制）
+ */
+export function processRotationInteraction(
+  landmarks: Array<{ x: number; y: number; z: number }>,
+  side: 'Left' | 'Right',
+  callbacks: RotationInteractionCallbacks
+) {
+  // 仅处理左手旋转
+  if (side !== 'Left') return;
+
+  const thumbTip = landmarks[4];
+  const indexTip = landmarks[8];
+  const pinchDistance = calculateDistance(
+    { x: thumbTip.x, y: thumbTip.y, z: thumbTip.z },
+    { x: indexTip.x, y: indexTip.y, z: indexTip.z }
+  );
+  const isPinching = pinchDistance < GESTURE_CONFIG.PINCH_THRESHOLD;
+
+  const handState = handStore.left;
+  const currentSelectedId = objectStore.selectedObjectId;
+
+  // === 检测捏合边沿 ===
+  const pinchStart = !handState.wasPinching && isPinching;  // 上升沿：手指合起
+  const pinchEnd = handState.wasPinching && !isPinching;    // 下降沿：手指分开
+
+  // 更新上一帧状态
+  callbacks.setWasPinching(side, isPinching);
+  callbacks.setPinching(side, isPinching, pinchDistance);
+
+  // === 捏合开始：开始旋转 ===
+  if (pinchStart) {
+    // 只有当有对象被选中时才开始旋转
+    if (currentSelectedId) {
+      // 计算手掌中心（使用手掌中心点 index 9）
+      const palmCenter = landmarks[9];
+      startRotating(currentSelectedId, palmCenter, callbacks);
+    }
+    return;
+  }
+
+  // === 捏合结束：停止旋转 ===
+  if (pinchEnd) {
+    if (handState.isRotating) {
+      callbacks.setRotating(side, false);
+    }
+    return;
+  }
+
+  // === 捏合中：处理旋转 ===
+  if (isPinching && handState.isRotating && currentSelectedId) {
+    // 计算手掌中心
+    const palmCenter = landmarks[9];
+    updateObjectRotation(currentSelectedId, palmCenter);
+  }
+}

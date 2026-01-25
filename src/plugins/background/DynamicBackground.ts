@@ -129,9 +129,10 @@ export class DynamicBackground {
   }
 
   update(deltaTime: number): void {
-    if (this.uniforms) {
-      this.uniforms.uTime.value += deltaTime * DYNAMIC_BACKGROUND_CONFIG.TIME_SCALE;
-    }
+    // 禁用时间更新，保持背景静态
+    // if (this.uniforms) {
+    //   this.uniforms.uTime.value += deltaTime * DYNAMIC_BACKGROUND_CONFIG.TIME_SCALE;
+    // }
   }
 
   dispose(): void {

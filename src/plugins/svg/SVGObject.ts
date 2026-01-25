@@ -25,6 +25,7 @@ export class SVGObject {
   private originalSize: SVGSize;  // 存储原始尺寸
   private aspectX: number;  // 宽高比（已归一化）
   private aspectY: number;  // 宽高比（已归一化）
+  private geometryMaxDimension: number = 1.0;  // 几何体实际最大尺寸（用于 scale 计算），默认 1.0
 
   // Affinity 风格选中效果
   private cornerDots: THREE.Sprite[] = [];                      // 4个角点
@@ -137,6 +138,10 @@ export class SVGObject {
     };
 
     const maxDimension = Math.max(actualSize.width, actualSize.height, actualSize.depth);
+
+    // 保存几何体最大尺寸，供 setScale 使用
+    this.geometryMaxDimension = maxDimension;
+
     const targetSize = this.baseScale; // 目标大小
     const scaleFactor = targetSize / maxDimension;
 
@@ -219,15 +224,20 @@ export class SVGObject {
 
   /**
    * 设置缩放（直接设置）
+   * scale 参数是世界坐标尺寸（例如 1.0 表示 baseScale）
    */
   setScale(scale: number): void {
-    // 设置 3D Group 的缩放
-    // 直接使用scale作为缩放值
-    this.mesh.scale.set(scale, -scale, scale);
+    // 计算缩放因子，与 build3DGeometry 保持一致
+    // 目标尺寸 = baseScale * scale
+    // scaleFactor = 目标尺寸 / geometryMaxDimension
+
+    const targetSize = this.baseScale * scale;
+    const scaleFactor = targetSize / this.geometryMaxDimension;
+
+    // 应用缩放
+    this.mesh.scale.set(scaleFactor, -scaleFactor, scaleFactor);
 
     // 设置 hitPlane 的缩放
-    // hitPlaneGeometry 尺寸为 baseScale * aspectX
-    // 我们想让它变为 scale * aspectX
     if (this.baseScale > 0) {
         const ratio = scale / this.baseScale;
         this.hitPlane.scale.set(ratio, ratio, 1);

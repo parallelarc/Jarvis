@@ -22,6 +22,10 @@ export type ExtendedHandState = HandState & {
   wasPinching: boolean;               // 上一帧的捏合状态（用于检测边沿）
   // bbox 触摸检测
   touchedObjectId: string | null;     // 当前食指触摸到的对象 ID（基于 bbox）
+  // 旋转交互状态（左手专用）
+  isRotating: boolean;                // 是否正在旋转
+  rotationBasePosition?: Vector3D;    // 旋转基准位置（捏合开始时的手掌位置）
+  baseRotation?: Vector3D;            // 旋转基准角度（捏合开始时的对象角度）
 };
 
 function createInitialHandState(side: HandSide): ExtendedHandState {
@@ -33,6 +37,7 @@ function createInitialHandState(side: HandSide): ExtendedHandState {
     isSelected: false,
     isPinching: false,
     isDragging: false,
+    isRotating: false,  // 旋转状态初始值
     pinchDistance: 0,
     currentGesture: null,
     fingersExtended: {
@@ -191,6 +196,22 @@ export const handActions = {
   setTouchedObjectId(side: HandSide, objectId: string | null) {
     const key = sideToKey(side);
     setHandStore(key, 'touchedObjectId', objectId);
+  },
+
+  // 旋转交互相关
+  setRotating(side: HandSide, isRotating: boolean) {
+    const key = sideToKey(side);
+    setHandStore(key, 'isRotating', isRotating);
+  },
+
+  setRotationBasePosition(side: HandSide, position: Vector3D) {
+    const key = sideToKey(side);
+    setHandStore(key, 'rotationBasePosition', position);
+  },
+
+  setBaseRotation(side: HandSide, rotation: Vector3D) {
+    const key = sideToKey(side);
+    setHandStore(key, 'baseRotation', rotation);
   },
 
   /**

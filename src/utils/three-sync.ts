@@ -23,6 +23,7 @@ interface SVGObject {
   updatePosition(position: Vector3D): void;
   setScale(scale: number): void;
   setSelected(selected: boolean): void;
+  setRotation(rotation: Vector3D): void;  // 旋转方法
 }
 
 /**
@@ -133,4 +134,21 @@ export function findObjectUnderPoint(point: { x: number; y: number }): string | 
   }
 
   return null;
+}
+
+/**
+ * 同步更新 SVG 对象旋转
+ */
+export function syncSVGObjectRotation(id: string, rotation: Vector3D): boolean {
+  const sceneAPI = getSceneAPI();
+  if (!sceneAPI) return false;
+
+  const svgObjects = sceneAPI.getSVGObjects();
+  if (!svgObjects) return false;
+
+  const svgObj = svgObjects.get(id) as SVGObject | undefined;
+  if (!svgObj) return false;
+
+  svgObj.setRotation(rotation);
+  return true;
 }

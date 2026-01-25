@@ -101,11 +101,16 @@ export function deselectAll() {
  *
  * 点击 = 捏合开始（手指合起）+ 捏合结束（手指分开）的完整动作
  * 点击必须在配置的时间限制内完成才算"干脆的点击"
+ *
+ * 左手：仅支持 click 选择，不支持拖拽，且不更新 pinch 状态（由旋转服务管理）
+ * 右手：支持 click 选择 + 拖拽
+ * 缩放模式：click 选择仍然工作，但拖拽被禁用
  */
 export function processDragInteraction(
   landmarks: Array<{ x: number; y: number; z: number }>,
   side: 'Left' | 'Right',
-  callbacks: DragInteractionCallbacks
+  callbacks: DragInteractionCallbacks,
+  skipPinchStateUpdate: boolean = false
 ) {
   const thumbTip = landmarks[4];
   const indexTip = landmarks[8];
@@ -118,16 +123,15 @@ export function processDragInteraction(
   const handState = side === 'Left' ? handStore.left : handStore.right;
   const currentSelectedId = objectStore.selectedObjectId;
 
-  // 缩放模式下禁用拖拽
-  if (handStore.zoomMode.active) return;
-
   // === 检测捏合边沿 ===
   const pinchStart = !handState.wasPinching && isPinching;  // 上升沿：手指合起
   const pinchEnd = handState.wasPinching && !isPinching;    // 下降沿：手指分开
 
-  // 更新上一帧状态
-  callbacks.setWasPinching(side, isPinching);
-  callbacks.setPinching(side, isPinching, pinchDistance);
+  // 更新上一帧状态（左手跳过，由旋转服务管理）
+  if (!skipPinchStateUpdate) {
+    callbacks.setWasPinching(side, isPinching);
+    callbacks.setPinching(side, isPinching, pinchDistance);
+  }
 
   const touchedId = findObjectUnderFinger(indexTip);
 
@@ -138,6 +142,7 @@ export function processDragInteraction(
   }
 
   // === 捏合结束：检测是否完成点击 ===
+  // click 选择在所有模式下都工作（包括缩放模式）
   if (pinchEnd) {
     const pinchStartId = handState.pinchStartObjectId;
     const pinchDuration = Date.now() - handState.pinchStartTime;
@@ -166,7 +171,11 @@ export function processDragInteraction(
   }
 
   // === 捏合中：处理拖拽 ===
-  if (isPinching && currentSelectedId) {
+  // 只有右手在非缩放模式下才能拖拽
+  if (side === 'Right' && isPinching && currentSelectedId) {
+    // 缩放模式下禁用拖拽
+    if (handStore.zoomMode.active) return;
+
     if (touchedId === currentSelectedId) {
       // 捏合已选中的对象：开始/继续拖拽
       if (!handState.isDragging) {

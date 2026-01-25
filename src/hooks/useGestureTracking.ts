@@ -18,6 +18,7 @@ import {
   deselectAll,
 } from '@/services/DragInteractionService';
 import { processScaleInteraction } from '@/services/ZoomInteractionService';
+import { processRotationInteraction } from '@/services/RotationInteractionService';
 import { drawHands } from '@/services/HandDrawingService';
 import type { Landmarks } from '@/core/types';
 
@@ -112,9 +113,15 @@ export function useGestureTracking() {
         // 处理触摸检测
         processTouchDetection(landmarks, side, handActions);
 
-        // 处理拖拽交互（仅右手）
-        if (side === 'Right') {
-          processDragInteraction(landmarks, side, handActions);
+        // 处理拖拽/旋转交互
+        if (side === 'Left') {
+          // 左手：先处理旋转（管理 pinch 状态），再处理 click 选择（不更新 pinch 状态）
+          processRotationInteraction(landmarks, side, handActions);
+          // 左手跳过 pinch 状态更新，由旋转服务管理
+          processDragInteraction(landmarks, side, handActions, true);
+        } else {
+          // 右手：处理 click 选择 + 拖拽（管理 pinch 状态）
+          processDragInteraction(landmarks, side, handActions, false);
         }
       }
 
