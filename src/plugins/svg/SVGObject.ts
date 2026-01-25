@@ -360,11 +360,18 @@ export class SVGObject {
     }
 
     const bounds = this.getBounds();
+    // 8个顶点：前面4个（z=min）+ 后面4个（z=max）
     const corners = [
+      // 前面4个点（z = min）
       new THREE_GLOBAL.Vector3(bounds.min.x, bounds.min.y, bounds.min.z),
       new THREE_GLOBAL.Vector3(bounds.max.x, bounds.min.y, bounds.min.z),
       new THREE_GLOBAL.Vector3(bounds.min.x, bounds.max.y, bounds.min.z),
       new THREE_GLOBAL.Vector3(bounds.max.x, bounds.max.y, bounds.min.z),
+      // 后面4个点（z = max）
+      new THREE_GLOBAL.Vector3(bounds.min.x, bounds.min.y, bounds.max.z),
+      new THREE_GLOBAL.Vector3(bounds.max.x, bounds.min.y, bounds.max.z),
+      new THREE_GLOBAL.Vector3(bounds.min.x, bounds.max.y, bounds.max.z),
+      new THREE_GLOBAL.Vector3(bounds.max.x, bounds.max.y, bounds.max.z),
     ];
 
     corners.forEach(corner => {
@@ -391,11 +398,18 @@ export class SVGObject {
 
     const bounds = this.getBounds();
 
+    // 8个顶点：前面4个（z=min）+ 后面4个（z=max）
     const corners = [
+      // 前面4个点（z = min）
       new THREE_GLOBAL.Vector3(bounds.min.x, bounds.min.y, bounds.min.z),
       new THREE_GLOBAL.Vector3(bounds.max.x, bounds.min.y, bounds.min.z),
       new THREE_GLOBAL.Vector3(bounds.min.x, bounds.max.y, bounds.min.z),
       new THREE_GLOBAL.Vector3(bounds.max.x, bounds.max.y, bounds.min.z),
+      // 后面4个点（z = max）
+      new THREE_GLOBAL.Vector3(bounds.min.x, bounds.min.y, bounds.max.z),
+      new THREE_GLOBAL.Vector3(bounds.max.x, bounds.min.y, bounds.max.z),
+      new THREE_GLOBAL.Vector3(bounds.min.x, bounds.max.y, bounds.max.z),
+      new THREE_GLOBAL.Vector3(bounds.max.x, bounds.max.y, bounds.max.z),
     ];
 
     this.cornerDots.forEach((dot, i) => {

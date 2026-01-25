@@ -145,13 +145,15 @@ export interface SVGLayoutItem {
 }
 
 // 尺寸配置：基于 1920x1080 画布的设计尺寸
+// 缩小并居中显示在屏幕中央（更紧凑的布局）
+// 所有元素作为一个整体，上下左右居中于屏幕中心(960, 540)
 export const SVG_LAYOUT_CONFIG: Record<string, SVGLayoutItem> = {
-  v: { x: 53.7, y: 783.6, width: 291.8, height: 238.5 },
-  b: { x: 358.6, y: 697.8, width: 261, height: 327.9 },
-  o: { x: 634.7, y: 783.6, width: 249.1, height: 242.2 },
-  t: { x: 889.7, y: 697.8, width: 152.7, height: 327.7 },
-  flower: { x: 1094.7, y: 659.7, width: 376.8, height: 365.8 },
-  bot: { x: 1511.1, y: 665.1, width: 352.3, height: 360.4 },
+  v: { x: 412, y: 506, width: 175, height: 143 },
+  b: { x: 605, y: 454, width: 157, height: 197 },
+  o: { x: 771, y: 506, width: 149, height: 145 },
+  t: { x: 924, y: 454, width: 92, height: 197 },
+  flower: { x: 1047, y: 431, width: 226, height: 219 },
+  bot: { x: 1297, y: 435, width: 211, height: 216 },
 } as const;
 
 /**
@@ -187,6 +189,9 @@ export const SVG_POSITION_CONFIG: Record<string, { x: number; y: number }> = Obj
     designToWorld(layout.x, layout.y, layout.width, layout.height),
   ])
 );
+
+// 调试日志：输出计算出的位置
+console.log('[CONFIG] SVG_POSITION_CONFIG calculated:', SVG_POSITION_CONFIG);
 
 // ============================================================================
 // 动态背景配置

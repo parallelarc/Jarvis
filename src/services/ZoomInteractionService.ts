@@ -13,8 +13,8 @@ import type { Landmarks } from '@/core/types';
 /**
  * 处理双手缩放交互
  *
- * 注意：触发条件已调整为双手触摸同一对象（为未来拉伸功能预留）
- * 当前版本暂不实现实际拉伸逻辑，仅保留缩放功能
+ * 新逻辑：只要双手都捏合，且有一个对象被选中，就可以缩放
+ * 不需要触摸到对象，无论手在屏幕任何位置都可以缩放
  */
 export function processScaleInteraction(
   leftLandmarks: Landmarks | null,
@@ -31,20 +31,7 @@ export function processScaleInteraction(
   const selectedId = objectStore.selectedObjectId;
   if (!selectedId) return;
 
-  // 检查双手是否触摸同一对象（未来拉伸功能的触发条件）
-  const leftTouchedId = handStore.left.touchedObjectId;
-  const rightTouchedId = handStore.right.touchedObjectId;
-  const bothTouchingSameObject = leftTouchedId &&
-                                 rightTouchedId &&
-                                 leftTouchedId === rightTouchedId;
-
-  // 如果双手触摸同一对象，预留拉伸功能（暂不实现）
-  if (bothTouchingSameObject) {
-    // future: trigger stretch mode here
-    // 目前不实现拉伸，返回避免干扰缩放
-    return;
-  }
-
+  // 新逻辑：移除触摸检查，只要双手捏合且有选中对象就可以缩放
   // 原有的缩放逻辑：使用捏合手势
   const leftPinching = handStore.left.isPinching;
   const rightPinching = handStore.right.isPinching;

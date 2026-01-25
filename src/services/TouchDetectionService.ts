@@ -1,10 +1,14 @@
 /**
  * 触摸检测服务
  * 负责检测手指与 SVG 对象的碰撞/触摸
+ *
+ * 注意：新交互模式下，触摸检测仅用于点击选择
+ * 选中后的操作（移动/旋转/缩放）不需要触摸到对象
  */
 
 import { normalizedToWorld } from '@/utils/math';
 import { findObjectUnderPoint } from '@/utils/three-sync';
+import { objectStore } from '@/stores/objectStore';
 
 export interface TouchDetectionCallbacks {
   setTouching: (side: 'Left' | 'Right', touching: boolean) => void;
@@ -14,8 +18,13 @@ export interface TouchDetectionCallbacks {
 /**
  * 查找手指下的对象（基于 bbox）
  * 使用 three-sync 工具函数进行精确的碰撞检测
+ * @param indexTip 手指位置
+ * @param preferredId 优先检查的对象ID（例如当前拖拽的对象）
  */
-function findObjectUnderFinger(indexTip: { x: number; y: number }): string | null {
+function findObjectUnderFinger(
+  indexTip: { x: number; y: number },
+  preferredId: string | null = null
+): string | null {
   const sceneAPI = (window as any).svgSceneAPI;
   const camera = sceneAPI?.getCamera();
   const handWorldPos = normalizedToWorld(
@@ -24,7 +33,7 @@ function findObjectUnderFinger(indexTip: { x: number; y: number }): string | nul
     window.innerWidth,
     window.innerHeight
   );
-  return findObjectUnderPoint(handWorldPos);
+  return findObjectUnderPoint(handWorldPos, preferredId);
 }
 
 /**
@@ -36,7 +45,10 @@ export function processTouchDetection(
   callbacks: TouchDetectionCallbacks
 ) {
   const indexTip = landmarks[8];
-  const touchedId = findObjectUnderFinger(indexTip);
+
+  // 优先检测当前选中的对象（用于拖拽场景）
+  const currentSelectedId = objectStore.selectedObjectId;
+  const touchedId = findObjectUnderFinger(indexTip, currentSelectedId);
 
   callbacks.setTouching(side, touchedId !== null);
   callbacks.setTouchedObjectId(side, touchedId);

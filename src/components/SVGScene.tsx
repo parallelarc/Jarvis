@@ -182,6 +182,11 @@ export function SVGScene() {
       objectActions.setInitialRotations(initialRotations);
       objectActions.setInitialScales(initialScales);
 
+      console.log(`[SVGScene] Initial positions set:`, initialPositions);
+      console.log(`[SVGScene] Expected positions from config:`, Object.fromEntries(
+        SVG_OBJECT_IDS.map(id => [id, SVG_POSITION_CONFIG[id]])
+      ));
+
       console.log(`[SVGScene] Initialized ${svgObjects.size} SVG objects with custom sizes`);
     } catch (error) {
       console.error('[SVGScene] Error initializing SVG objects:', error);

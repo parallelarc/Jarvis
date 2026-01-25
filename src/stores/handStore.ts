@@ -10,7 +10,7 @@ import type { FingersExtended } from '@/domain/GestureDetector';
  * 扩展的手部状态 - 包含拖拽偏移和手势
  */
 export type ExtendedHandState = HandState & {
-  dragOffset?: Vector3D;
+  dragOffset: Vector3D | null;  // 拖拽偏移量，null 表示未在拖拽
   isDragging: boolean;
   currentGesture: string | null;
   fingersExtended?: FingersExtended;
@@ -120,7 +120,7 @@ export const handActions = {
     setHandStore(key, 'pinchDistance', distance);
   },
 
-  setDragOffset(side: HandSide, offset: Vector3D) {
+  setDragOffset(side: HandSide, offset: Vector3D | null) {
     const key = sideToKey(side);
     setHandStore(key, 'dragOffset', offset);
   },

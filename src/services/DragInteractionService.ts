@@ -8,7 +8,6 @@ import { objectStore, objectActions } from '@/stores/objectStore';
 import { GESTURE_CONFIG, INTERACTION_CONFIG } from '@/config';
 import { normalizedToWorld, calculateDistance } from '@/utils/math';
 import {
-  findObjectUnderPoint,
   syncSVGObjectPosition,
   syncSVGObjectSelected,
   syncAllSVGObjectsSelected,
@@ -20,7 +19,7 @@ export interface DragInteractionCallbacks {
   setPinching: (side: 'Left' | 'Right', isPinching: boolean, distance: number) => void;
   setPinchStartObject: (side: 'Left' | 'Right', objectId: string | null) => void;
   setPinchStartTime: (side: 'Left' | 'Right', time: number) => void;
-  setDragOffset: (side: 'Left' | 'Right', offset: { x: number; y: number; z: number }) => void;
+  setDragOffset: (side: 'Left' | 'Right', offset: { x: number; y: number; z: number } | null) => void;
   setDragging: (side: 'Left' | 'Right', isDragging: boolean) => void;
 }
 
@@ -38,56 +37,6 @@ function selectObject(id: string) {
 }
 
 /**
- * 开始拖拽
- */
-function startDragging(
-  id: string,
-  indexTip: { x: number; y: number },
-  callbacks: DragInteractionCallbacks
-) {
-  const sceneAPI = (window as any).svgSceneAPI;
-  const camera = sceneAPI?.getCamera();
-  const handWorldPos = normalizedToWorld(
-    { x: indexTip.x, y: indexTip.y },
-    camera,
-    window.innerWidth,
-    window.innerHeight
-  );
-  const objState = objectStore.objects[id];
-
-  callbacks.setDragOffset('Right', {
-    x: handWorldPos.x - objState.position.x,
-    y: handWorldPos.y - objState.position.y,
-    z: 0,
-  });
-  callbacks.setDragging('Right', true);
-}
-
-/**
- * 更新对象位置（拖拽中）
- */
-function updateObjectPosition(id: string, indexTip: { x: number; y: number }) {
-  const handState = handStore.right;
-  const sceneAPI = (window as any).svgSceneAPI;
-  const camera = sceneAPI?.getCamera();
-  const handWorldPos = normalizedToWorld(
-    { x: indexTip.x, y: indexTip.y },
-    camera,
-    window.innerWidth,
-    window.innerHeight
-  );
-  const newPosition = {
-    x: handWorldPos.x - (handState.dragOffset?.x || 0),
-    y: handWorldPos.y - (handState.dragOffset?.y || 0),
-  };
-
-  objectActions.updateObjectPosition(id, newPosition);
-
-  // 同步更新 Three.js 对象
-  syncSVGObjectPosition(id, { x: newPosition.x, y: newPosition.y, z: 0 });
-}
-
-/**
  * 取消所有选中
  */
 export function deselectAll() {
@@ -99,13 +48,16 @@ export function deselectAll() {
 /**
  * 处理拖拽交互 - 点击选中 + 捏合拖拽
  *
+ * 新交互逻辑：
+ * - 点击选择：需要触摸到对象并完成快速点击（捏合开始+结束）
+ * - 拖拽：只要对象被选中，右手捏合即可拖拽，不需要触摸到对象
+ * - 左手：仅支持 click 选择，不支持拖拽
+ * - 左手的 pinch 状态由 RotationInteractionService 管理，此处只做读取
+ * - 右手：支持 click 选择 + 拖拽，并管理自己的 pinch 状态
+ * - 缩放模式：click 选择仍然工作，但拖拽被禁用
+ *
  * 点击 = 捏合开始（手指合起）+ 捏合结束（手指分开）的完整动作
  * 点击必须在配置的时间限制内完成才算"干脆的点击"
- *
- * 左手：仅支持 click 选择，不支持拖拽
- * 左手的 pinch 状态由 RotationInteractionService 管理，此处只做读取
- * 右手：支持 click 选择 + 拖拽，并管理自己的 pinch 状态
- * 缩放模式：click 选择仍然工作，但拖拽被禁用
  */
 export function processDragInteraction(
   landmarks: Array<{ x: number; y: number; z: number }>,
@@ -166,25 +118,68 @@ export function processDragInteraction(
 
     // 清除捏合开始记录
     callbacks.setPinchStartObject(side, null);
-    // 停止拖拽
+
+    // 关键修复：停止拖拽时清除 dragOffset，避免下次捏合时使用旧值
     if (handState.isDragging) {
       callbacks.setDragging(side, false);
+      callbacks.setDragOffset(side, null);  // 清除偏移量
     }
     return;
   }
 
   // === 捏合中：处理拖拽 ===
-  // 只有右手在非缩放模式下才能拖拽
+  // 新逻辑：只要右手有选中对象，且不在缩放模式，就可以拖拽
+  // 不需要触摸到对象，无论手在屏幕任何位置都可以拖拽
   if (side === 'Right' && isPinching && currentSelectedId) {
     // 缩放模式下禁用拖拽
     if (handStore.zoomMode.active) return;
 
-    if (touchedId === currentSelectedId) {
-      // 捏合已选中的对象：开始/继续拖拽
-      if (!handState.isDragging) {
-        startDragging(currentSelectedId, indexTip, callbacks);
-      }
-      updateObjectPosition(currentSelectedId, indexTip);
+    const sceneAPI = (window as any).svgSceneAPI;
+    const camera = sceneAPI?.getCamera();
+    const handWorldPos = normalizedToWorld(
+      { x: indexTip.x, y: indexTip.y },
+      camera,
+      window.innerWidth,
+      window.innerHeight
+    );
+
+    // 关键改进：使用 dragOffset 的存在与否来判断拖拽状态
+    // 而不是依赖 isDragging 标志（可能是异步的）
+    const dragOffset = handState.dragOffset;
+
+    if (dragOffset) {
+      // 已经有偏移量：继续拖拽，使用 store 中的 dragOffset
+      const newPosition = {
+        x: handWorldPos.x - dragOffset.x,
+        y: handWorldPos.y - dragOffset.y,
+      };
+      objectActions.updateObjectPosition(currentSelectedId, newPosition);
+      syncSVGObjectPosition(currentSelectedId, { x: newPosition.x, y: newPosition.y, z: 0 });
+    } else {
+      // 没有偏移量：这是捏合的第一帧，需要计算偏移量
+      // 从 Three.js 对象读取实际位置（最准确）
+      const svgObjects = sceneAPI?.getSVGObjects();
+      const svgObj = svgObjects?.get(currentSelectedId);
+      if (!svgObj) return;
+
+      const actualPosition = svgObj.mesh.position;
+      const newDragOffset = {
+        x: handWorldPos.x - actualPosition.x,
+        y: handWorldPos.y - actualPosition.y,
+        z: 0,
+      };
+
+      // 先更新 store（异步）
+      callbacks.setDragOffset('Right', newDragOffset);
+      callbacks.setDragging('Right', true);
+
+      // 立即使用局部变量更新位置（避免等待异步 store）
+      const newPosition = {
+        x: handWorldPos.x - newDragOffset.x,
+        y: handWorldPos.y - newDragOffset.y,
+      };
+      objectActions.updateObjectPosition(currentSelectedId, newPosition);
+      syncSVGObjectPosition(currentSelectedId, { x: newPosition.x, y: newPosition.y, z: 0 });
     }
   }
 }

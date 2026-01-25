@@ -117,8 +117,10 @@ export function isPointInSVGObject(
 
 /**
  * 查找手指下的 SVG 对象 ID
+ * @param point 手指在世界坐标中的位置
+ * @param preferredId 优先检查的对象ID（例如当前拖拽的对象）
  */
-export function findObjectUnderPoint(point: { x: number; y: number }): string | null {
+export function findObjectUnderPoint(point: { x: number; y: number }, preferredId: string | null = null): string | null {
   const sceneAPI = getSceneAPI();
   if (!sceneAPI) return null;
 
@@ -127,7 +129,19 @@ export function findObjectUnderPoint(point: { x: number; y: number }): string | 
 
   const point3D = new THREE.Vector3(point.x, point.y, 0);
 
+  // 如果指定了 preferredId，优先检查该对象
+  if (preferredId) {
+    const preferredObj = svgObjects.get(preferredId) as any;
+    if (preferredObj && preferredObj.containsPoint(point3D)) {
+      return preferredId;
+    }
+  }
+
+  // 检查所有对象
   for (const [id, svgObj] of svgObjects) {
+    // 跳过已检查的 preferredId
+    if (preferredId && id === preferredId) continue;
+
     if ((svgObj as any).containsPoint(point3D)) {
       return id;
     }
