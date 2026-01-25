@@ -3,7 +3,7 @@
  * 管理 Three.js 渲染和 SVG 对象显示
  */
 
-import { onMount, onCleanup, untrack } from 'solid-js';
+import { onMount, onCleanup, untrack, createEffect } from 'solid-js';
 import { objectStore, objectActions } from '@/stores/objectStore';
 import { SVGRegistry, SVG_OBJECT_IDS } from '@/plugins/svg/SVGRegistry';
 import { SVGObject } from '@/plugins/svg/SVGObject';
@@ -22,6 +22,9 @@ export function SVGScene() {
 
   // 动态背景
   let dynamicBackground: DynamicBackground | null = null;
+
+  // 性能优化：缓存旋转值，避免每帧读取响应式 Store
+  const cachedRotations = new Map<string, { x: number; y: number; z: number }>();
 
   // 设计画布尺寸（用于尺寸换算）
   const DESIGN_CANVAS_WIDTH = 1920;
@@ -68,8 +71,32 @@ export function SVGScene() {
     // 创建动态背景
     dynamicBackground = new DynamicBackground(scene);
 
+    // 添加三点光照系统
+    // 1. 环境光 (Ambient Light) - 基础照明，增强至白色表面可见
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
+    scene.add(ambientLight);
+
+    // 2. 主光 (Key Light) - 定义明暗
+    const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    mainLight.position.set(5, 5, 10);
+    scene.add(mainLight);
+
+    // 3. 补光 (Fill Light) - 柔化阴影
+    const fillLight = new THREE.PointLight(0xccccff, 0.6);
+    fillLight.position.set(-5, 0, 5);
+    scene.add(fillLight);
+
+    // 4. 轮廓光 (Rim Light) - 勾勒边缘
+    const rimLight = new THREE.SpotLight(0xffffff, 0.8);
+    rimLight.position.set(0, 5, -2);
+    rimLight.lookAt(0, 0, 0);
+    scene.add(rimLight);
+
     // 初始化 SVG 对象
     initSVGObjects();
+
+    // 初始化旋转缓存
+    initRotationCache();
 
     // 开始渲染循环
     startRenderLoop();
@@ -106,14 +133,23 @@ export function SVGScene() {
           ? calculateBaseScale(layout.width, aspectX)
           : 1.0;
 
-        const shapes = SVGRegistry.getShapes(id);
+        const shapeData = SVGRegistry.getShapeData(id);
+
+        console.log(`[SVGScene] Creating SVGObject ${id}:`, {
+          hasShapeData: shapeData && shapeData.length > 0,
+          shapeDataLength: shapeData ? shapeData.length : 0,
+          baseScale,
+          originalSize,
+          position
+        });
+
         const svgObj = new SVGObject({
           id,
           texture,
           position,
           baseScale,
           originalSize,
-          shapes,
+          shapeData,
         });
 
         svgObjects.set(id, svgObj);
@@ -132,7 +168,48 @@ export function SVGScene() {
       console.log(`[SVGScene] Initialized ${svgObjects.size} SVG objects with custom sizes`);
     } catch (error) {
       console.error('[SVGScene] Error initializing SVG objects:', error);
+      console.error('[SVGScene] Error details:', {
+        message: (error as Error).message,
+        stack: (error as Error).stack,
+        name: (error as Error).name
+      });
     }
+  }
+
+  /**
+   * 初始化旋转缓存并监听变化
+   * 性能优化：使用响应式 effect 同步旋转值到缓存，避免渲染循环中频繁读取 Store
+   */
+  function initRotationCache() {
+    // 初始化缓存：从 Store 中读取当前旋转值
+    SVG_OBJECT_IDS.forEach(id => {
+      const rotation = objectStore.objects[id]?.rotation;
+      if (rotation) {
+        cachedRotations.set(id, { ...rotation });
+      }
+    });
+
+    // 创建响应式 effect：监听 Store 变化并更新缓存
+    createEffect(() => {
+      // 使用 untrack 避免在 effect 中追踪 nested access
+      untrack(() => {
+        SVG_OBJECT_IDS.forEach(id => {
+          const rotation = objectStore.objects[id]?.rotation;
+          if (rotation) {
+            const cached = cachedRotations.get(id);
+            const isChanged =
+              !cached ||
+              cached.x !== rotation.x ||
+              cached.y !== rotation.y ||
+              cached.z !== rotation.z;
+
+            if (isChanged) {
+              cachedRotations.set(id, { ...rotation });
+            }
+          }
+        });
+      });
+    });
   }
 
   /**
@@ -169,6 +246,13 @@ export function SVGScene() {
 
             // 更新 hitPlane 位置
             obj.hitPlane.position.z = floatOffset;
+
+            // 性能优化：直接使用缓存的旋转值（通过 effect 保持同步）
+            // 这样渲染循环完全不读取响应式 Store
+            const cachedRotation = cachedRotations.get(id);
+            if (cachedRotation) {
+              obj.setRotation(cachedRotation);
+            }
           }
         });
       });

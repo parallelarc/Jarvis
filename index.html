@@ -7,12 +7,23 @@
 
   <!-- MediaPipe Libraries -->
   <script src="./models/libs/hands.js" async></script>
+  <!-- 性能优化：禁用 FaceMesh 以降低 CPU 占用 -->
+  <!-- <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script> -->
   <script src="./models/libs/drawing_utils.js" async></script>
   <script src="./models/libs/camera_utils.js" async></script>
 
   <!-- Three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/SVGLoader.js"></script>
+
+  <!-- Import Map for Three.js ES Modules -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
 
   <style>
     * {

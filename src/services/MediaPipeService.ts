@@ -3,9 +3,6 @@
  * 负责 MediaPipe Hands 初始化和摄像头处理
  */
 
-import { GESTURE_DETECTION_CONFIG } from '@/config';
-import type { Landmarks, HandSide } from '@/core/types';
-
 // MediaPipe 类型声明
 declare global {
   interface Window {
@@ -32,12 +29,14 @@ export interface MediaPipeResult {
 
 export interface MediaPipeCallbacks {
   onResults: (results: MediaPipeResult) => void;
+  onFaceResults?: (position: { x: number; y: number }) => void;
   setStatus: (status: string) => void;
   onLoadingChange: (loading: boolean) => void;
 }
 
 export interface MediaPipeState {
   hands: any;
+  faceMesh: any;
   camera: any;
   canvasElement: HTMLCanvasElement | null;
   videoElement: HTMLVideoElement | null;
@@ -68,6 +67,7 @@ function getVideoDisplayArea() {
 export function createMediaPipeService(callbacks: MediaPipeCallbacks): MediaPipeService {
   const state: MediaPipeState = {
     hands: null,
+    faceMesh: null,
     camera: null,
     canvasElement: null,
     videoElement: null,
@@ -108,8 +108,8 @@ export function createMediaPipeService(callbacks: MediaPipeCallbacks): MediaPipe
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
+          width: { ideal: 640 },   // 降低分辨率以提升性能：640x480 (原1920x1080)
+          height: { ideal: 480 },  // 页面显示分辨率通过CSS保持不变
           facingMode: 'user',
         },
       });
@@ -121,6 +121,40 @@ export function createMediaPipeService(callbacks: MediaPipeCallbacks): MediaPipe
         });
         updateCanvasToMatchVideo();
       }
+
+      // 性能优化：禁用 FaceMesh（视差效果）以降低CPU占用
+      // FaceMesh 需要检测 478 个面部关键点，CPU消耗极高
+      // 如需重新启用，取消下方注释即可
+      /*
+      // Initialize FaceMesh
+      if (typeof window.FaceMesh !== 'undefined') {
+        state.faceMesh = new window.FaceMesh({
+          locateFile: (file: string) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+          },
+        });
+
+        state.faceMesh.setOptions({
+          maxNumFaces: 1,
+          refineLandmarks: true,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+        });
+
+        state.faceMesh.onResults((results: any) => {
+            if (callbacks.onFaceResults && results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                const landmarks = results.multiFaceLandmarks[0];
+                const nose = landmarks[1];
+                if (nose && typeof nose.x === 'number' && typeof nose.y === 'number') {
+                    callbacks.onFaceResults({
+                        x: (nose.x - 0.5) * 2,
+                        y: (nose.y - 0.5) * 2
+                    });
+                }
+            }
+        });
+      }
+      */
 
       if (typeof window.Hands !== 'undefined') {
         state.hands = new window.Hands({
@@ -155,17 +189,21 @@ export function createMediaPipeService(callbacks: MediaPipeCallbacks): MediaPipe
         if (typeof window.Camera !== 'undefined') {
           state.camera = new window.Camera(state.videoElement, {
             onFrame: async () => {
-              await state.hands.send({ image: state.videoElement! });
+              const promises = [];
+              if (state.hands) promises.push(state.hands.send({ image: state.videoElement! }));
+              // FaceMesh 已禁用以提升性能
+              // if (state.faceMesh) promises.push(state.faceMesh.send({ image: state.videoElement! }));
+              await Promise.all(promises);
             },
-            width: 1920,
-            height: 1080,
+            width: 640,   // 降低分辨率以提升性能：640x480 (原1920x1080)
+            height: 480,  // 页面显示分辨率通过CSS保持不变
           });
 
           await state.camera.start();
         }
       }
 
-      callbacks.setStatus('Hand tracking ready!');
+      callbacks.setStatus('Tracking ready (Hands only)!');
       callbacks.onLoadingChange(false);
     } catch (error) {
       callbacks.setStatus(`Error: ${(error as Error).message}`);
@@ -182,6 +220,12 @@ export function createMediaPipeService(callbacks: MediaPipeCallbacks): MediaPipe
     }
     if (state.canvasElement && state.canvasElement.parentNode) {
       state.canvasElement.parentNode.removeChild(state.canvasElement);
+    }
+    if (state.hands) {
+      state.hands.close();
+    }
+    if (state.faceMesh) {
+      state.faceMesh.close();
     }
   }
 

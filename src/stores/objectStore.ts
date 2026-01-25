@@ -11,7 +11,7 @@ import { syncSVGObjectPosition, syncAllSVGObjectsSelected } from '@/utils/three-
 export interface ObjectState {
   position: Vector3D;
   scale: number;
-  rotation: number;
+  rotation: Vector3D;
   selected: boolean;
 }
 
@@ -22,12 +22,12 @@ export type ObjectStoreState = {
 };
 
 const initialObjects: Record<string, ObjectState> = {
-  v: { position: { x: 0, y: 0, z: 0 }, scale: 1.0, rotation: 0, selected: false },
-  b: { position: { x: 0, y: 0, z: 0 }, scale: 1.0, rotation: 0, selected: false },
-  o: { position: { x: 0, y: 0, z: 0 }, scale: 1.0, rotation: 0, selected: false },
-  t: { position: { x: 0, y: 0, z: 0 }, scale: 1.0, rotation: 0, selected: false },
-  flower: { position: { x: 0, y: 0, z: 0 }, scale: 1.0, rotation: 0, selected: false },
-  bot: { position: { x: 0, y: 0, z: 0 }, scale: 1.0, rotation: 0, selected: false },
+  v: { position: { x: 0, y: 0, z: 0 }, scale: 1.0, rotation: { x: Math.PI / 12, y: -Math.PI / 6, z: 0 }, selected: false },
+  b: { position: { x: 0, y: 0, z: 0 }, scale: 1.0, rotation: { x: Math.PI / 12, y: -Math.PI / 6, z: 0 }, selected: false },
+  o: { position: { x: 0, y: 0, z: 0 }, scale: 1.0, rotation: { x: Math.PI / 12, y: -Math.PI / 6, z: 0 }, selected: false },
+  t: { position: { x: 0, y: 0, z: 0 }, scale: 1.0, rotation: { x: Math.PI / 12, y: -Math.PI / 6, z: 0 }, selected: false },
+  flower: { position: { x: 0, y: 0, z: 0 }, scale: 1.0, rotation: { x: Math.PI / 12, y: -Math.PI / 6, z: 0 }, selected: false },
+  bot: { position: { x: 0, y: 0, z: 0 }, scale: 1.0, rotation: { x: Math.PI / 12, y: -Math.PI / 6, z: 0 }, selected: false },
 };
 
 const initialState: ObjectStoreState = {
@@ -89,8 +89,19 @@ export const objectActions = {
   /**
    * 更新对象旋转
    */
-  updateObjectRotation(id: string, rotation: number) {
-    setObjectStore('objects', id, 'rotation', rotation);
+  updateObjectRotation(id: string, rotation: Vector3D) {
+    setObjectStore('objects', id, 'rotation', { ...rotation });
+  },
+
+  /**
+   * 更新所有对象旋转 (用于视差效果)
+   */
+  setAllObjectsRotation(rotation: Vector3D) {
+    const ids = Object.keys(objectStore.objects);
+    // 为每个对象单独更新旋转
+    ids.forEach(id => {
+      setObjectStore('objects', id, 'rotation', { ...rotation });
+    });
   },
 
   /**
@@ -106,7 +117,7 @@ export const objectActions = {
       resetState[id] = {
         position: { ...initialPos },
         scale: 1.0,
-        rotation: 0,
+        rotation: { x: 0, y: 0, z: 0 },
         selected: false,
       };
 

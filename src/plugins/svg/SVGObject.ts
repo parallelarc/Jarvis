@@ -4,23 +4,22 @@
  */
 
 import type * as THREE from 'three';
-import type { SVGSize } from './SVGRegistry';
+import type { SVGSize, SVGShapeData } from './SVGRegistry';
 import { INTERACTION_CONFIG } from '@/config';
 
 export interface SVGObjectConfig {
   id: string;
-  texture: THREE.Texture;
+  texture?: THREE.Texture; // Keep for fallback or unused
   position: THREE.Vector3;
   baseScale?: number;
   originalSize?: SVGSize;  // SVG 原始尺寸（用于精确的包围盒计算）
-  shapes?: THREE.Shape[];  // SVG 路径形状（用于计算实际内容边界）
+  shapeData?: SVGShapeData[];  // SVG 路径形状数据（用于 3D 构建）
 }
 
 export class SVGObject {
   public readonly id: string;
-  public mesh: THREE.Sprite;
+  public mesh: THREE.Group; // Main container
   public hitPlane: THREE.Mesh;
-  private texture: THREE.Texture;
   private baseScale: number;
   private originalSize: SVGSize;  // 存储原始尺寸
   private aspectX: number;  // 宽高比（已归一化）
@@ -34,20 +33,23 @@ export class SVGObject {
   private isDebugMode: boolean = false;                         // 调试模式状态
 
   private bboxHelper: THREE.Box3Helper | null = null;  // 复用：调试模式/选中状态的 bbox 可视化
-  private shapes: THREE.Shape[] = [];
+  private shapeData: SVGShapeData[] = [];
   private contentBounds: { minX: number; minY: number; maxX: number; maxY: number } | null = null;
 
   constructor(config: SVGObjectConfig) {
     this.id = config.id;
-    this.texture = config.texture;
     this.baseScale = config.baseScale ?? 1.0;
     // 存储 SVG 原始尺寸，默认为正方形
     this.originalSize = config.originalSize ?? { width: 1, height: 1 };
 
     // 存储形状并计算内容边界
-    this.shapes = config.shapes ?? [];
-    if (this.shapes.length > 0) {
-      this.computeContentBounds();
+    this.shapeData = config.shapeData ?? [];
+    if (this.shapeData.length > 0) {
+      try {
+        this.computeContentBounds();
+      } catch (error) {
+        console.error(`[SVGObject] Error computing bounds for ${this.id}:`, error);
+      }
     }
 
     // 计算宽高比（归一化，使较大边为 1）
@@ -57,22 +59,25 @@ export class SVGObject {
 
     const THREE = window.THREE as any;
 
-    // 创建可见的 Sprite
-    const spriteMaterial = new THREE.SpriteMaterial({
-      map: this.texture,
-      transparent: true,
-      opacity: 1.0,
-      depthTest: true,
-      depthWrite: false,
-    });
-
-    this.mesh = new THREE.Sprite(spriteMaterial);
+    // 创建 3D Group
+    this.mesh = new THREE.Group();
     this.mesh.position.copy(config.position);
-    // 使用实际宽高比设置 scale
-    this.mesh.scale.set(this.baseScale * this.aspectX, this.baseScale * this.aspectY, 1);
     this.mesh.userData = { svgObject: this, id: this.id };
 
-    // 创建不可见的射线检测平面 - 使用实际宽高比
+    // 构建 3D 几何体
+    if (this.shapeData.length > 0) {
+      try {
+        this.build3DGeometry();
+      } catch (error) {
+        console.error(`[SVGObject] Error building 3D geometry for ${this.id}:`, error);
+        console.error(`[SVGObject] Error stack:`, (error as Error).stack);
+      }
+    } else {
+        // Fallback or empty?
+        console.warn(`[SVGObject] No shape data for ${this.id}`);
+    }
+
+    // 创建不可见的射线检测平面 - 保持原有逻辑
     const hitPlaneGeometry = new THREE.PlaneGeometry(
       this.baseScale * this.aspectX,
       this.baseScale * this.aspectY
@@ -86,6 +91,66 @@ export class SVGObject {
     this.hitPlane.position.copy(config.position);
     this.hitPlane.userData = { svgObject: this, id: this.id };
   }
+
+  /**
+   * 构建 3D 几何体
+   */
+  private build3DGeometry() {
+    const THREE = window.THREE as any;
+
+    // Extrude Settings - 禁用倒角以保持低多边形数
+    const extrudeSettings = {
+      depth: 200, // 大深度，但不增加多边形
+      bevelEnabled: false  // 禁用倒角，避免多边形爆炸
+    };
+
+    // 计算中心偏移
+    let centerX = 0, centerY = 0;
+    if (this.contentBounds) {
+        centerX = -(this.contentBounds.minX + this.contentBounds.maxX) / 2;
+        centerY = -(this.contentBounds.minY + this.contentBounds.maxY) / 2;
+    }
+
+    this.shapeData.forEach(data => {
+        const geometry = new THREE.ExtrudeGeometry(data.shape, extrudeSettings);
+
+        // 居中几何体
+        geometry.translate(centerX, centerY, -extrudeSettings.depth / 2);
+
+        // 材质：白色哑光表面
+        const material = new THREE.MeshStandardMaterial({
+            color: 0xffffff,  // 纯白色
+            roughness: 1.0,  // 完全粗糙，哑光
+            metalness: 0.0,  // 完全无金属感
+            side: THREE.DoubleSide
+        });
+
+        const mesh = new THREE.Mesh(geometry, material);
+        this.mesh.add(mesh);
+    });
+
+    // 计算实际几何体的边界框，基于边界框缩放到合理大小
+    const tempBox = new THREE.Box3();
+    tempBox.setFromObject(this.mesh);
+
+    const actualSize = {
+      width: tempBox.max.x - tempBox.min.x,
+      height: tempBox.max.y - tempBox.min.y,
+      depth: tempBox.max.z - tempBox.min.z
+    };
+
+    const maxDimension = Math.max(actualSize.width, actualSize.height, actualSize.depth);
+    const targetSize = this.baseScale; // 目标大小
+    const scaleFactor = targetSize / maxDimension;
+
+    // 应用缩放和翻转Y轴
+    this.mesh.scale.set(scaleFactor, -scaleFactor, scaleFactor);
+
+    // 添加旋转让3D效果更明显（从右侧面看）
+    this.mesh.rotation.y = -Math.PI / 6; // 绕Y轴旋转-30度
+    this.mesh.rotation.x = Math.PI / 12; // 绕X轴轻微旋转15度
+  }
+
 
   /**
    * 创建白色圆点纹理（用于选中框的角点装饰）
@@ -120,19 +185,20 @@ export class SVGObject {
     const THREE = window.THREE as any;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
-    for (const shape of this.shapes) {
-      const box = new THREE.Box2();
-      // Shape.getBoundingBox() 返回实际路径的边界
-      shape.getBoundingBox(box);
-      minX = Math.min(minX, box.min.x);
-      minY = Math.min(minY, box.min.y);
-      maxX = Math.max(maxX, box.max.x);
-      maxY = Math.max(maxY, box.max.y);
+    for (const data of this.shapeData) {
+      // 获取形状的所有点来计算边界
+      const points = data.shape.getPoints();
+      for (const point of points) {
+        minX = Math.min(minX, point.x);
+        minY = Math.min(minY, point.y);
+        maxX = Math.max(maxX, point.x);
+        maxY = Math.max(maxY, point.y);
+      }
     }
 
     if (isFinite(minX)) {
       this.contentBounds = { minX, minY, maxX, maxY };
-      console.log(`[SVGObject] ${this.id} content bounds:`, this.contentBounds);
+      // console.log(`[SVGObject] ${this.id} content bounds:`, this.contentBounds);
     }
   }
 
@@ -167,8 +233,47 @@ export class SVGObject {
    * 设置缩放（直接设置）
    */
   setScale(scale: number): void {
-    this.mesh.scale.set(scale * this.aspectX, scale * this.aspectY, 1);
-    this.hitPlane.scale.set(scale * this.aspectX, scale * this.aspectY, 1);
+    // 设置 3D Group 的缩放
+    // 直接使用scale作为缩放值
+    this.mesh.scale.set(scale, -scale, scale);
+
+    // 设置 hitPlane 的缩放
+    // hitPlaneGeometry 尺寸为 baseScale * aspectX
+    // 我们想让它变为 scale * aspectX
+    if (this.baseScale > 0) {
+        const ratio = scale / this.baseScale;
+        this.hitPlane.scale.set(ratio, ratio, 1);
+    }
+
+    // 同步更新 bbox helper（如果存在）
+    if (this.bboxHelper) {
+      const bounds = this.getBounds();
+      this.bboxHelper.box = bounds;
+    }
+    // 同步更新角点位置（如果可见）
+    if (this.isSelected) {
+      this.updateCornerDots();
+    }
+  }
+
+  /**
+   * 设置旋转 (弧度)
+   */
+  setRotation(rotation: { x: number; y: number; z: number }): void {
+    // 性能优化：检查旋转值是否真正变化，避免不必要的边界框计算
+    const currentRotation = this.mesh.rotation;
+    const isChanged =
+      currentRotation.x !== rotation.x ||
+      currentRotation.y !== rotation.y ||
+      currentRotation.z !== rotation.z;
+
+    if (!isChanged) {
+      return; // 旋转值未变化，直接返回
+    }
+
+    this.mesh.rotation.set(rotation.x, rotation.y, rotation.z);
+    this.hitPlane.rotation.set(rotation.x, rotation.y, rotation.z);
+
     // 同步更新 bbox helper（如果存在）
     if (this.bboxHelper) {
       const bounds = this.getBounds();
@@ -191,63 +296,21 @@ export class SVGObject {
    * 获取缩放
    */
   getScale(): number {
-    return this.mesh.scale.x;
+    // 这里的 scale 概念是 "最大边的世界尺寸"
+    const maxDim = Math.max(this.originalSize.width, this.originalSize.height);
+    return Math.abs(this.mesh.scale.x) * maxDim;
   }
 
   /**
    * 获取边界框（用于点击检测）
-   * 如果有实际内容边界，使用基于 Shape 的精确边界；否则使用 Sprite 的 scale
    */
   getBounds(): THREE.Box3 {
     const THREE = window.THREE as any;
     const box = new THREE.Box3();
-
-    if (this.contentBounds) {
-      // 使用实际内容边界计算包围盒
-      const maxDim = Math.max(this.originalSize.width, this.originalSize.height);
-
-      // 将 SVG 坐标转换为 Sprite 局部坐标（归一化到 -0.5 到 0.5）
-      const contentWidth = this.contentBounds.maxX - this.contentBounds.minX;
-      const contentHeight = this.contentBounds.maxY - this.contentBounds.minY;
-      const contentCenterX = (this.contentBounds.minX + this.contentBounds.maxX) / 2;
-      const contentCenterY = (this.contentBounds.minY + this.contentBounds.maxY) / 2;
-
-      // 归一化尺寸（相对于 maxDim）
-      const normWidth = contentWidth / maxDim * this.baseScale;
-      const normHeight = contentHeight / maxDim * this.baseScale;
-
-      // 内容中心相对于 Sprite 中心的偏移
-      const offsetX = (contentCenterX / maxDim - 0.5) * this.baseScale * this.aspectX;
-      const offsetY = (0.5 - contentCenterY / maxDim) * this.baseScale * this.aspectY;
-
-      box.min.set(
-        this.mesh.position.x + offsetX - normWidth / 2,
-        this.mesh.position.y + offsetY - normHeight / 2,
-        this.mesh.position.z - 0.1
-      );
-      box.max.set(
-        this.mesh.position.x + offsetX + normWidth / 2,
-        this.mesh.position.y + offsetY + normHeight / 2,
-        this.mesh.position.z + 0.1
-      );
-    } else {
-      // 回退到原始方法（使用 Sprite scale）
-      const scaleX = this.mesh.scale.x;
-      const scaleY = this.mesh.scale.y;
-      box.min.set(
-        this.mesh.position.x - scaleX / 2,
-        this.mesh.position.y - scaleY / 2,
-        this.mesh.position.z - 0.1
-      );
-      box.max.set(
-        this.mesh.position.x + scaleX / 2,
-        this.mesh.position.y + scaleY / 2,
-        this.mesh.position.z + 0.1
-      );
-    }
-
+    box.setFromObject(this.mesh);
     return box;
   }
+
 
   /**
    * 检查点是否在对象内
