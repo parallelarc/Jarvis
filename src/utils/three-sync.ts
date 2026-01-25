@@ -4,6 +4,7 @@
  */
 
 import type { Vector3D } from '@/core/types';
+import { THREE } from './three';
 
 /**
  * SVG 场景 API 接口
@@ -109,7 +110,6 @@ export function isPointInSVGObject(
   point: { x: number; y: number },
   svgObject: { containsPoint: (point: any) => boolean }
 ): boolean {
-  const THREE = window.THREE as any;
   const point3D = new THREE.Vector3(point.x, point.y, 0);
   return svgObject.containsPoint(point3D);
 }
@@ -124,7 +124,6 @@ export function findObjectUnderPoint(point: { x: number; y: number }): string | 
   const svgObjects = sceneAPI.getSVGObjects();
   if (!svgObjects) return null;
 
-  const THREE = window.THREE as any;
   const point3D = new THREE.Vector3(point.x, point.y, 0);
 
   for (const [id, svgObj] of svgObjects) {

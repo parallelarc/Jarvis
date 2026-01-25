@@ -4,6 +4,7 @@
  */
 
 import type * as THREE from 'three';
+import { THREE as THREE_GLOBAL } from '@/utils/three';
 
 export interface SVGSize {
   width: number;
@@ -164,11 +165,11 @@ export class SVGRegistry {
       return new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => {
-          const texture = new (window.THREE as any).Texture(img);
+          const texture = new THREE_GLOBAL.Texture(img);
           texture.needsUpdate = true;
-          texture.colorSpace = (window.THREE as any).SRGBColorSpace;
-          texture.minFilter = (window.THREE as any).LinearFilter;
-          texture.magFilter = (window.THREE as any).LinearFilter;
+          texture.colorSpace = THREE_GLOBAL.SRGBColorSpace;
+          texture.minFilter = THREE_GLOBAL.LinearFilter;
+          texture.magFilter = THREE_GLOBAL.LinearFilter;
           this.textures.set(asset.id, texture);
           resolve(texture);
         };

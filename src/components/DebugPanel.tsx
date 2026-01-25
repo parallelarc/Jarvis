@@ -5,6 +5,7 @@
 import { createSignal, createMemo, Show, For } from 'solid-js';
 import { handStore } from '@/stores/handStore';
 import { objectStore, objectActions } from '@/stores/objectStore';
+import { calculateDistance } from '@/utils/math';
 import './DebugPanel.css';
 
 // 全局可见状态
@@ -42,10 +43,7 @@ export function DebugPanel() {
     if (!left.landmarks || !right.landmarks) return null;
     const leftWrist = left.landmarks[0];
     const rightWrist = right.landmarks[0];
-    const dx = leftWrist.x - rightWrist.x;
-    const dy = leftWrist.y - rightWrist.y;
-    const dz = leftWrist.z - rightWrist.z;
-    return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    return calculateDistance(leftWrist, rightWrist);
   });
 
   // 检测到的手数量

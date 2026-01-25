@@ -5,6 +5,7 @@
  */
 
 import { DYNAMIC_BACKGROUND_CONFIG } from '@/config';
+import { THREE } from '@/utils/three';
 
 export class DynamicBackground {
   private mesh: any = null;
@@ -16,8 +17,6 @@ export class DynamicBackground {
   }
 
   private init(scene: any): void {
-    const THREE = (window as any).THREE;
-
     // 全屏平面几何体
     const geometry = new THREE.PlaneGeometry(
       DYNAMIC_BACKGROUND_CONFIG.PLANE_SIZE,

@@ -6,6 +6,7 @@
 import type * as THREE from 'three';
 import type { SVGSize, SVGShapeData } from './SVGRegistry';
 import { INTERACTION_CONFIG } from '@/config';
+import { THREE as THREE_GLOBAL } from '@/utils/three';
 
 export interface SVGObjectConfig {
   id: string;
@@ -57,10 +58,8 @@ export class SVGObject {
     this.aspectX = this.originalSize.width / maxDim;
     this.aspectY = this.originalSize.height / maxDim;
 
-    const THREE = window.THREE as any;
-
     // 创建 3D Group
-    this.mesh = new THREE.Group();
+    this.mesh = new THREE_GLOBAL.Group();
     this.mesh.position.copy(config.position);
     this.mesh.userData = { svgObject: this, id: this.id };
 
@@ -78,16 +77,16 @@ export class SVGObject {
     }
 
     // 创建不可见的射线检测平面 - 保持原有逻辑
-    const hitPlaneGeometry = new THREE.PlaneGeometry(
+    const hitPlaneGeometry = new THREE_GLOBAL.PlaneGeometry(
       this.baseScale * this.aspectX,
       this.baseScale * this.aspectY
     );
-    const hitPlaneMaterial = new THREE.MeshBasicMaterial({
+    const hitPlaneMaterial = new THREE_GLOBAL.MeshBasicMaterial({
       visible: false,
-      side: THREE.DoubleSide,
+      side: THREE_GLOBAL.DoubleSide,
     });
 
-    this.hitPlane = new THREE.Mesh(hitPlaneGeometry, hitPlaneMaterial);
+    this.hitPlane = new THREE_GLOBAL.Mesh(hitPlaneGeometry, hitPlaneMaterial);
     this.hitPlane.position.copy(config.position);
     this.hitPlane.userData = { svgObject: this, id: this.id };
   }
@@ -96,8 +95,6 @@ export class SVGObject {
    * 构建 3D 几何体
    */
   private build3DGeometry() {
-    const THREE = window.THREE as any;
-
     // Extrude Settings - 禁用倒角以保持低多边形数
     const extrudeSettings = {
       depth: 200, // 大深度，但不增加多边形
@@ -112,25 +109,25 @@ export class SVGObject {
     }
 
     this.shapeData.forEach(data => {
-        const geometry = new THREE.ExtrudeGeometry(data.shape, extrudeSettings);
+        const geometry = new THREE_GLOBAL.ExtrudeGeometry(data.shape, extrudeSettings);
 
         // 居中几何体
         geometry.translate(centerX, centerY, -extrudeSettings.depth / 2);
 
         // 材质：白色哑光表面
-        const material = new THREE.MeshStandardMaterial({
+        const material = new THREE_GLOBAL.MeshStandardMaterial({
             color: 0xffffff,  // 纯白色
             roughness: 1.0,  // 完全粗糙，哑光
             metalness: 0.0,  // 完全无金属感
-            side: THREE.DoubleSide
+            side: THREE_GLOBAL.DoubleSide
         });
 
-        const mesh = new THREE.Mesh(geometry, material);
+        const mesh = new THREE_GLOBAL.Mesh(geometry, material);
         this.mesh.add(mesh);
     });
 
     // 计算实际几何体的边界框，基于边界框缩放到合理大小
-    const tempBox = new THREE.Box3();
+    const tempBox = new THREE_GLOBAL.Box3();
     tempBox.setFromObject(this.mesh);
 
     const actualSize = {
@@ -174,7 +171,7 @@ export class SVGObject {
     ctx.lineWidth = 4;
     ctx.stroke();
 
-    const texture = new (window as any).THREE.CanvasTexture(canvas);
+    const texture = new THREE_GLOBAL.CanvasTexture(canvas);
     return texture;
   }
 
@@ -182,7 +179,6 @@ export class SVGObject {
    * 计算 SVG 实际内容的边界（基于所有 Shape 的边界）
    */
   private computeContentBounds(): void {
-    const THREE = window.THREE as any;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
     for (const data of this.shapeData) {
@@ -208,15 +204,7 @@ export class SVGObject {
   updatePosition(position: THREE.Vector3): void {
     this.mesh.position.copy(position);
     this.hitPlane.position.copy(position);
-    // 同步更新 bbox helper（如果存在）
-    if (this.bboxHelper) {
-      const bounds = this.getBounds();
-      this.bboxHelper.box = bounds;
-    }
-    // 同步更新角点位置（如果可见）
-    if (this.isSelected) {
-      this.updateCornerDots();
-    }
+    this.syncBoundingBoxVisuals();
   }
 
   /**
@@ -245,15 +233,7 @@ export class SVGObject {
         this.hitPlane.scale.set(ratio, ratio, 1);
     }
 
-    // 同步更新 bbox helper（如果存在）
-    if (this.bboxHelper) {
-      const bounds = this.getBounds();
-      this.bboxHelper.box = bounds;
-    }
-    // 同步更新角点位置（如果可见）
-    if (this.isSelected) {
-      this.updateCornerDots();
-    }
+    this.syncBoundingBoxVisuals();
   }
 
   /**
@@ -274,15 +254,7 @@ export class SVGObject {
     this.mesh.rotation.set(rotation.x, rotation.y, rotation.z);
     this.hitPlane.rotation.set(rotation.x, rotation.y, rotation.z);
 
-    // 同步更新 bbox helper（如果存在）
-    if (this.bboxHelper) {
-      const bounds = this.getBounds();
-      this.bboxHelper.box = bounds;
-    }
-    // 同步更新角点位置（如果可见）
-    if (this.isSelected) {
-      this.updateCornerDots();
-    }
+    this.syncBoundingBoxVisuals();
   }
 
   /**
@@ -305,8 +277,7 @@ export class SVGObject {
    * 获取边界框（用于点击检测）
    */
   getBounds(): THREE.Box3 {
-    const THREE = window.THREE as any;
-    const box = new THREE.Box3();
+    const box = new THREE_GLOBAL.Box3();
     box.setFromObject(this.mesh);
     return box;
   }
@@ -350,14 +321,13 @@ export class SVGObject {
    * 确保 bboxHelper 存在并设置为指定颜色
    */
   private ensureBBoxHelper(color: number): void {
-    const THREE = window.THREE as any;
     const scene = this.selectionScene;
     if (!scene) return;
 
     const bounds = this.getBounds();
 
     if (!this.bboxHelper) {
-      this.bboxHelper = new THREE.Box3Helper(bounds, new THREE.Color(color));
+      this.bboxHelper = new THREE_GLOBAL.Box3Helper(bounds, new THREE_GLOBAL.Color(color));
       scene.add(this.bboxHelper);
     } else {
       // 更新 box 和颜色
@@ -375,28 +345,26 @@ export class SVGObject {
     const scene = this.selectionScene;
     if (!scene) return;
 
-    const THREE = window.THREE as any;
-
     if (!this.cornerDotTexture) {
       this.cornerDotTexture = SVGObject.createCornerDotTexture();
     }
 
     const bounds = this.getBounds();
     const corners = [
-      new THREE.Vector3(bounds.min.x, bounds.min.y, bounds.min.z),
-      new THREE.Vector3(bounds.max.x, bounds.min.y, bounds.min.z),
-      new THREE.Vector3(bounds.min.x, bounds.max.y, bounds.min.z),
-      new THREE.Vector3(bounds.max.x, bounds.max.y, bounds.min.z),
+      new THREE_GLOBAL.Vector3(bounds.min.x, bounds.min.y, bounds.min.z),
+      new THREE_GLOBAL.Vector3(bounds.max.x, bounds.min.y, bounds.min.z),
+      new THREE_GLOBAL.Vector3(bounds.min.x, bounds.max.y, bounds.min.z),
+      new THREE_GLOBAL.Vector3(bounds.max.x, bounds.max.y, bounds.min.z),
     ];
 
     corners.forEach(corner => {
-      const material = new THREE.SpriteMaterial({
+      const material = new THREE_GLOBAL.SpriteMaterial({
         map: this.cornerDotTexture,
         transparent: true,
         opacity: 1.0,
         depthTest: false
       });
-      const dot = new THREE.Sprite(material);
+      const dot = new THREE_GLOBAL.Sprite(material);
       dot.position.copy(corner);
       dot.scale.set(0.08, 0.08, 1);
       dot.visible = this.isSelected;
@@ -411,19 +379,34 @@ export class SVGObject {
   private updateCornerDots(): void {
     if (this.cornerDots.length === 0) return;
 
-    const THREE = window.THREE as any;
     const bounds = this.getBounds();
 
     const corners = [
-      new THREE.Vector3(bounds.min.x, bounds.min.y, bounds.min.z),
-      new THREE.Vector3(bounds.max.x, bounds.min.y, bounds.min.z),
-      new THREE.Vector3(bounds.min.x, bounds.max.y, bounds.min.z),
-      new THREE.Vector3(bounds.max.x, bounds.max.y, bounds.min.z),
+      new THREE_GLOBAL.Vector3(bounds.min.x, bounds.min.y, bounds.min.z),
+      new THREE_GLOBAL.Vector3(bounds.max.x, bounds.min.y, bounds.min.z),
+      new THREE_GLOBAL.Vector3(bounds.min.x, bounds.max.y, bounds.min.z),
+      new THREE_GLOBAL.Vector3(bounds.max.x, bounds.max.y, bounds.min.z),
     ];
 
     this.cornerDots.forEach((dot, i) => {
       dot.position.copy(corners[i]);
     });
+  }
+
+  /**
+   * 同步边界框可视化（bbox helper 和角点）
+   * 在位置、缩放、旋转更新后调用
+   */
+  private syncBoundingBoxVisuals(): void {
+    // 同步更新 bbox helper（如果存在）
+    if (this.bboxHelper) {
+      const bounds = this.getBounds();
+      this.bboxHelper.box = bounds;
+    }
+    // 同步更新角点位置（如果可见）
+    if (this.isSelected) {
+      this.updateCornerDots();
+    }
   }
 
   /**

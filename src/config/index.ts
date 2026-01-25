@@ -82,6 +82,16 @@ export const VIEW_CONFIG = {
 } as const;
 
 // ============================================================================
+// 设计画布配置
+// ============================================================================
+
+export const DESIGN_CONFIG = {
+  DESIGN_CANVAS_WIDTH: 1920,
+  DESIGN_CANVAS_HEIGHT: 1080,
+  WORLD_WIDTH: 10,  // Three.js 世界坐标宽度范围 (-5 到 +5)
+} as const;
+
+// ============================================================================
 // 手势检测内部配置
 // ============================================================================
 
@@ -143,19 +153,17 @@ export const SVG_LAYOUT_CONFIG: Record<string, SVGLayoutItem> = {
  * 注意：size_rule.md 中的 (x, y) 是 SVG 的左上角，需要转换为 SVG 中心点
  */
 function designToWorld(designX: number, designY: number, width: number, height: number): { x: number; y: number } {
-  const DESIGN_WIDTH = 1920;
-  const DESIGN_HEIGHT = 1080;
-  const WORLD_WIDTH = 10;  // -5 到 +5
-  const WORLD_HEIGHT = WORLD_WIDTH * (DESIGN_HEIGHT / DESIGN_WIDTH);  // 5.625
+  const { DESIGN_CANVAS_WIDTH, DESIGN_CANVAS_HEIGHT, WORLD_WIDTH } = DESIGN_CONFIG;
+  const WORLD_HEIGHT = WORLD_WIDTH * (DESIGN_CANVAS_HEIGHT / DESIGN_CANVAS_WIDTH);  // 5.625
 
   // 将 SVG 左上角坐标转换为中心点坐标
   const centerX = designX + width / 2;
   const centerY = designY + height / 2;
 
   // X: (centerX - canvasCenter) / canvasWidth * worldWidth
-  const worldX = (centerX - DESIGN_WIDTH / 2) / DESIGN_WIDTH * WORLD_WIDTH;
+  const worldX = (centerX - DESIGN_CANVAS_WIDTH / 2) / DESIGN_CANVAS_WIDTH * WORLD_WIDTH;
   // Y: 反转 Y 轴 (canvasCenterY - centerY) / canvasHeight * worldHeight
-  const worldY = (DESIGN_HEIGHT / 2 - centerY) / DESIGN_HEIGHT * WORLD_HEIGHT;
+  const worldY = (DESIGN_CANVAS_HEIGHT / 2 - centerY) / DESIGN_CANVAS_HEIGHT * WORLD_HEIGHT;
 
   return { x: Math.round(worldX * 100) / 100, y: Math.round(worldY * 100) / 100 };
 }

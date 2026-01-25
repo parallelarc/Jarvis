@@ -4,6 +4,7 @@
 
 import type { Vector3D } from '@/core/types';
 import { VIEW_CONFIG, PARTICLE_CONFIG } from '@/config';
+import { THREE } from './three';
 
 /**
  * 计算两点间距离（3D）
@@ -58,7 +59,7 @@ export function normalizedToWorld(
   const { INVERT_X, INVERT_Y } = VIEW_CONFIG;
 
   // 创建归一化设备坐标 (NDC) -1 到 +1
-  const ndc = new (window as any).THREE.Vector3(
+  const ndc = new THREE.Vector3(
     (point.x * 2) - 1,
     (point.y * 2) - 1,
     0.5  // 在相机前方

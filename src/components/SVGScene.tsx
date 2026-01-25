@@ -7,8 +7,9 @@ import { onMount, onCleanup, untrack, createEffect } from 'solid-js';
 import { objectStore, objectActions } from '@/stores/objectStore';
 import { SVGRegistry, SVG_OBJECT_IDS } from '@/plugins/svg/SVGRegistry';
 import { SVGObject } from '@/plugins/svg/SVGObject';
-import { CAMERA_CONFIG, SVG_LAYOUT_CONFIG, SVG_POSITION_CONFIG } from '@/config';
+import { CAMERA_CONFIG, SVG_LAYOUT_CONFIG, SVG_POSITION_CONFIG, DESIGN_CONFIG } from '@/config';
 import { DynamicBackground } from '@/plugins/background/DynamicBackground';
+import { THREE } from '@/utils/three';
 
 export function SVGScene() {
   let sceneRef: HTMLDivElement | undefined;
@@ -26,9 +27,8 @@ export function SVGScene() {
   // 性能优化：缓存旋转值，避免每帧读取响应式 Store
   const cachedRotations = new Map<string, { x: number; y: number; z: number }>();
 
-  // 设计画布尺寸（用于尺寸换算）
-  const DESIGN_CANVAS_WIDTH = 1920;
-  const WORLD_WIDTH = 10;  // Three.js 世界坐标宽度范围 (-5 到 +5)
+  // 使用配置文件中的设计画布尺寸（用于尺寸换算）
+  const { DESIGN_CANVAS_WIDTH, WORLD_WIDTH } = DESIGN_CONFIG;
 
   /**
    * 根据设计宽度计算 baseScale
@@ -45,8 +45,6 @@ export function SVGScene() {
    */
   function initScene() {
     if (!sceneRef || !window.THREE) return;
-
-    const THREE = window.THREE;
 
     // 场景
     scene = new THREE.Scene();
@@ -108,7 +106,6 @@ export function SVGScene() {
   async function initSVGObjects() {
     try {
       const textures = await SVGRegistry.loadAllTextures();
-      const THREE = window.THREE as any;
 
       // 收集初始位置
       const initialPositions: Record<string, { x: number; y: number; z: number }> = {};

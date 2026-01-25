@@ -291,56 +291,24 @@ export function isThumbPinching(
 }
 
 /**
- * 检测拇指与食指是否捏合
- * @deprecated 使用 isThumbPinching(landmarks, 'index') 代替
- */
-export function isThumbIndexPinching(landmarks: Landmarks): boolean {
-  return isThumbPinching(landmarks, 'index');
-}
-
-/**
- * 检测拇指与中指是否捏合
- * @deprecated 使用 isThumbPinching(landmarks, 'middle') 代替
- */
-export function isThumbMiddlePinching(landmarks: Landmarks): boolean {
-  return isThumbPinching(landmarks, 'middle');
-}
-
-/**
- * 检测拇指与无名指是否捏合
- * @deprecated 使用 isThumbPinching(landmarks, 'ring') 代替
- */
-export function isThumbRingPinching(landmarks: Landmarks): boolean {
-  return isThumbPinching(landmarks, 'ring');
-}
-
-/**
- * 检测拇指与小指是否捏合
- * @deprecated 使用 isThumbPinching(landmarks, 'pinky') 代替
- */
-export function isThumbPinkyPinching(landmarks: Landmarks): boolean {
-  return isThumbPinching(landmarks, 'pinky');
-}
-
-/**
  * 获取所有捏合状态
  */
 export function getAllPinchStates(landmarks: Landmarks): PinchStates {
   return {
     thumbIndex: {
-      isPinching: isThumbIndexPinching(landmarks),
+      isPinching: isThumbPinching(landmarks, 'index'),
       distance: calculateDistance(landmarks[4], landmarks[8]),
     },
     thumbMiddle: {
-      isPinching: isThumbMiddlePinching(landmarks),
+      isPinching: isThumbPinching(landmarks, 'middle'),
       distance: calculateDistance(landmarks[4], landmarks[12]),
     },
     thumbRing: {
-      isPinching: isThumbRingPinching(landmarks),
+      isPinching: isThumbPinching(landmarks, 'ring'),
       distance: calculateDistance(landmarks[4], landmarks[16]),
     },
     thumbPinky: {
-      isPinching: isThumbPinkyPinching(landmarks),
+      isPinching: isThumbPinching(landmarks, 'pinky'),
       distance: calculateDistance(landmarks[4], landmarks[20]),
     },
   };
@@ -350,10 +318,10 @@ export function getAllPinchStates(landmarks: Landmarks): PinchStates {
  * 获取当前正在捏合的手指
  */
 export function getPinchingFinger(landmarks: Landmarks): 'index' | 'middle' | 'ring' | 'pinky' | null {
-  if (isThumbIndexPinching(landmarks)) return 'index';
-  if (isThumbMiddlePinching(landmarks)) return 'middle';
-  if (isThumbRingPinching(landmarks)) return 'ring';
-  if (isThumbPinkyPinching(landmarks)) return 'pinky';
+  if (isThumbPinching(landmarks, 'index')) return 'index';
+  if (isThumbPinching(landmarks, 'middle')) return 'middle';
+  if (isThumbPinching(landmarks, 'ring')) return 'ring';
+  if (isThumbPinching(landmarks, 'pinky')) return 'pinky';
   return null;
 }
 
