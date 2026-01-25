@@ -115,10 +115,10 @@ export function useGestureTracking() {
 
         // 处理拖拽/旋转交互
         if (side === 'Left') {
-          // 左手：先处理旋转（管理 pinch 状态），再处理 click 选择（不更新 pinch 状态）
-          processRotationInteraction(landmarks, side, handActions);
-          // 左手跳过 pinch 状态更新，由旋转服务管理
+          // 左手：先处理 click 选择（读取旧状态），再处理旋转（更新 pinch 状态）
+          // 这样确保两个服务都使用相同的 wasPinching 状态进行边沿检测
           processDragInteraction(landmarks, side, handActions, true);
+          processRotationInteraction(landmarks, side, handActions);
         } else {
           // 右手：处理 click 选择 + 拖拽（管理 pinch 状态）
           processDragInteraction(landmarks, side, handActions, false);

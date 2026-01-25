@@ -102,8 +102,9 @@ export function deselectAll() {
  * 点击 = 捏合开始（手指合起）+ 捏合结束（手指分开）的完整动作
  * 点击必须在配置的时间限制内完成才算"干脆的点击"
  *
- * 左手：仅支持 click 选择，不支持拖拽，且不更新 pinch 状态（由旋转服务管理）
- * 右手：支持 click 选择 + 拖拽
+ * 左手：仅支持 click 选择，不支持拖拽
+ * 左手的 pinch 状态由 RotationInteractionService 管理，此处只做读取
+ * 右手：支持 click 选择 + 拖拽，并管理自己的 pinch 状态
  * 缩放模式：click 选择仍然工作，但拖拽被禁用
  */
 export function processDragInteraction(
@@ -124,10 +125,12 @@ export function processDragInteraction(
   const currentSelectedId = objectStore.selectedObjectId;
 
   // === 检测捏合边沿 ===
+  // 对于左手：wasPinching 已由 RotationInteractionService 更新，直接使用
+  // 对于右手：此处读取当前帧的 wasPinching，稍后更新
   const pinchStart = !handState.wasPinching && isPinching;  // 上升沿：手指合起
   const pinchEnd = handState.wasPinching && !isPinching;    // 下降沿：手指分开
 
-  // 更新上一帧状态（左手跳过，由旋转服务管理）
+  // 更新上一帧状态（右手更新，左手跳过因为由旋转服务管理）
   if (!skipPinchStateUpdate) {
     callbacks.setWasPinching(side, isPinching);
     callbacks.setPinching(side, isPinching, pinchDistance);

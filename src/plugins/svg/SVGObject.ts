@@ -338,7 +338,7 @@ export class SVGObject {
 
     if (!this.bboxHelper) {
       this.bboxHelper = new THREE_GLOBAL.Box3Helper(bounds, new THREE_GLOBAL.Color(color));
-      scene.add(this.bboxHelper);
+      scene.add(this.bboxHelper!);
     } else {
       // 更新 box 和颜色
       this.bboxHelper.box = bounds;
@@ -486,9 +486,26 @@ export class SVGObject {
    * 释放资源
    */
   dispose(): void {
-    this.mesh.material.dispose();
+    // 清理 Group 中所有子对象的材质和几何体
+    this.mesh.traverse((child) => {
+      if ((child as any).isMesh) {
+        const mesh = child as THREE.Mesh;
+        if (Array.isArray(mesh.material)) {
+          mesh.material.forEach((m: any) => m.dispose());
+        } else {
+          (mesh.material as any).dispose();
+        }
+        (mesh.geometry as any).dispose();
+      }
+    });
+
     this.hitPlane.geometry.dispose();
-    this.hitPlane.material.dispose();
+    // material 可以是单个 Material 或 Material[]
+    if (Array.isArray(this.hitPlane.material)) {
+      this.hitPlane.material.forEach((m: any) => m.dispose());
+    } else {
+      (this.hitPlane.material as any).dispose();
+    }
 
     // 清理 bbox helper
     this.disposeBBoxHelper();

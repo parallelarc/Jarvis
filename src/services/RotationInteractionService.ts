@@ -67,7 +67,6 @@ function updateObjectRotation(id: string, palmCenter: { x: number; y: number }) 
   const baseRotation = handState.baseRotation;
 
   if (!basePos || !baseRotation) {
-    console.warn('[RotationInteraction] Missing base position or rotation');
     return;
   }
 
@@ -90,10 +89,8 @@ function updateObjectRotation(id: string, palmCenter: { x: number; y: number }) 
     z: baseRotation.z,  // 保持 Z 轴旋转不变
   };
 
+  // 更新 Store（渲染循环会自动同步到 Three.js）
   objectActions.updateObjectRotation(id, newRotation);
-
-  // 同步更新 Three.js 对象
-  syncSVGObjectRotation(id, newRotation);
 }
 
 /**
@@ -101,12 +98,17 @@ function updateObjectRotation(id: string, palmCenter: { x: number; y: number }) 
  *
  * 触发条件：
  * - 左手捏合（拇指+食指）
- * - 有对象被右手选中
+ * - 有对象被选中（可以是通过右手选中，或左手点击选中）
  *
  * 旋转方式：
  * - 手掌左右移动 → Y 轴旋转（左右转）
  * - 手掌上下移动 → X 轴旋转（上下倾）
  * - 支持 360° 无极旋转（无角度限制）
+ *
+ * 注意：
+ * - 此服务必须在 processDragInteraction 之后调用（见 useGestureTracking.ts）
+ * - 这样确保两个服务都使用相同的 wasPinching 状态进行边沿检测
+ * - pinch 状态更新在此服务中进行（processDragInteraction 跳过更新）
  */
 export function processRotationInteraction(
   landmarks: Array<{ x: number; y: number; z: number }>,
@@ -127,11 +129,11 @@ export function processRotationInteraction(
   const handState = handStore.left;
   const currentSelectedId = objectStore.selectedObjectId;
 
-  // === 检测捏合边沿 ===
+  // === 检测捏合边沿（使用更新前的 wasPinching 状态）===
   const pinchStart = !handState.wasPinching && isPinching;  // 上升沿：手指合起
   const pinchEnd = handState.wasPinching && !isPinching;    // 下降沿：手指分开
 
-  // 更新上一帧状态
+  // 更新 pinch 状态（在 processDragInteraction 读取之后执行）
   callbacks.setWasPinching(side, isPinching);
   callbacks.setPinching(side, isPinching, pinchDistance);
 

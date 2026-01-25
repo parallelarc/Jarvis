@@ -182,29 +182,27 @@ export function SVGScene() {
     SVG_OBJECT_IDS.forEach(id => {
       const rotation = objectStore.objects[id]?.rotation;
       if (rotation) {
-        cachedRotations.set(id, { ...rotation });
+        cachedRotations.set(id, { x: rotation.x, y: rotation.y, z: rotation.z || 0 });
       }
     });
 
-    // 创建响应式 effect：监听 Store 变化并更新缓存
-    createEffect(() => {
-      // 使用 untrack 避免在 effect 中追踪 nested access
-      untrack(() => {
-        SVG_OBJECT_IDS.forEach(id => {
-          const rotation = objectStore.objects[id]?.rotation;
-          if (rotation) {
-            const cached = cachedRotations.get(id);
-            const isChanged =
-              !cached ||
-              cached.x !== rotation.x ||
-              cached.y !== rotation.y ||
-              cached.z !== rotation.z;
+    // 创建响应式 effects：分别监听每个对象的旋转变化
+    // 这样可以避免 untrack() 并且减少不必要的追踪
+    SVG_OBJECT_IDS.forEach(id => {
+      createEffect(() => {
+        const rotation = objectStore.objects[id]?.rotation;
+        if (rotation) {
+          const cached = cachedRotations.get(id);
+          const isChanged =
+            !cached ||
+            cached.x !== rotation.x ||
+            cached.y !== rotation.y ||
+            cached.z !== rotation.z;
 
-            if (isChanged) {
-              cachedRotations.set(id, { ...rotation });
-            }
+          if (isChanged) {
+            cachedRotations.set(id, { x: rotation.x, y: rotation.y, z: rotation.z || 0 });
           }
-        });
+        }
       });
     });
   }
@@ -248,7 +246,13 @@ export function SVGScene() {
             // 这样渲染循环完全不读取响应式 Store
             const cachedRotation = cachedRotations.get(id);
             if (cachedRotation) {
-              obj.setRotation(cachedRotation);
+              // 只在旋转值真正改变时才调用 setRotation（避免不必要的性能开销）
+              const currentMeshRotation = obj.mesh.rotation;
+              if (currentMeshRotation.x !== cachedRotation.x ||
+                  currentMeshRotation.y !== cachedRotation.y ||
+                  currentMeshRotation.z !== cachedRotation.z) {
+                obj.setRotation(cachedRotation);
+              }
             }
           }
         });
