@@ -18,7 +18,7 @@ export const PARTICLE_CONFIG = {
 // ============================================================================
 
 export const GESTURE_CONFIG = {
-  PINCH_THRESHOLD: 0.08,  // 捏合阈值（统一值）
+  PINCH_THRESHOLD: 0.05,  // 捏合阈值（降低以避免远距离误判）
   BOUNDARY_Y: 4.5,
 } as const;
 

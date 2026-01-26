@@ -107,11 +107,12 @@ export function DebugPanel() {
 
   return (
     <>
-      {/* 切换按钮 */}
+      {/* 切换按钮 - 已隐藏 */}
       <button
         class="debug-toggle"
         onClick={toggleDebugPanel}
         classList={{ active: visible() }}
+        style={{ display: 'none' }}
       >
         Debug
       </button>
