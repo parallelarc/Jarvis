@@ -388,10 +388,3 @@ export function SVGScene() {
 
   return <div ref={sceneRef} class="particle-scene" />;
 }
-
-/**
- * 获取场景 API（供其他组件使用）
- */
-export function getSVGSceneAPI() {
-  return (window as any).svgSceneAPI;
-}

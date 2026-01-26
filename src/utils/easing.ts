@@ -20,15 +20,6 @@ export function easeInOutCubic(t: number): number {
 }
 
 /**
- * easeOutElastic - 弹性效果
- */
-export function easeOutElastic(t: number): number {
-  const c4 = (2 * Math.PI) / 3;
-  return t === 0 ? 0 : t === 1 ? 1
-    : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1;
-}
-
-/**
  * 线性缓动 - 匀速运动
  */
 export function linear(t: number): number {

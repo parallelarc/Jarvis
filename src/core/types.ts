@@ -18,8 +18,6 @@ export type Color = {
   b: number;  // 0-1
 };
 
-export type HexColor = number;  // 0xRRGGBB
-
 // ============================================================================
 // 手势相关类型
 // ============================================================================
@@ -45,28 +43,8 @@ export type HandState = {
 };
 
 // ============================================================================
-// 粒子相关类型
-// ============================================================================
-
-export type ParticlePosition = Float32Array;  // [x, y, z, x, y, z, ...]
-export type ParticleColor = Float32Array;     // [r, g, b, r, g, b, ...]
-
-export type AnimationState =
-  | 'ball'
-  | 'exploding'
-  | 'forming'
-  | 'text'
-  | 'recovering';
-
-// ============================================================================
 // 配置相关类型
 // ============================================================================
-
-export type ParticleConfig = {
-  PARTICLE_COUNT: number;
-  BASE_RADIUS: number;
-  PARTICLE_SIZE: number;
-};
 
 export type GestureConfig = {
   PINCH_THRESHOLD: number;
@@ -77,16 +55,6 @@ export type SpreadConfig = {
   SPREAD_MIN: number;
   SPREAD_MAX: number;
   SPREAD_SMOOTHING: number;
-};
-
-export type RippleConfig = {
-  RIPPLE_DURATION: number;
-  RIPPLE_EXPANSION_SPEED: number;
-  RIPPLE_WIDTH: number;
-};
-
-export type ColorConfig = {
-  DEFAULT_COLOR: Color;
 };
 
 export type CameraConfig = {

@@ -25,7 +25,7 @@ export interface SVGShapeData {
     opacity: number;
 }
 
-export const SVG_ASSETS: SVGAsset[] = [
+const SVG_ASSETS: SVGAsset[] = [
   { id: 'v', name: 'Letter V', path: '/assets/v.svg' },
   { id: 'b', name: 'Letter B', path: '/assets/b.svg' },
   { id: 'o', name: 'Letter O', path: '/assets/o.svg' },

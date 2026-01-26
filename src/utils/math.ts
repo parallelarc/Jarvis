@@ -85,19 +85,3 @@ export function normalizedToWorld(
 
   return { x: ndc.x, y: ndc.y, z: 0 };
 }
-
-/**
- * 检查点是否接近粒子球
- */
-export function isPointNearParticlesWithPos(
-  point: Vector3D,
-  spherePos: Vector3D,
-  spread: number
-): boolean {
-  const worldPos = normalizedToWorld({ x: point.x, y: point.y });
-  const dx = worldPos.x - spherePos.x;
-  const dy = worldPos.y - spherePos.y;
-  const dz = -(spherePos.z ?? 0);
-  const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-  return distance < PARTICLE_CONFIG.BASE_RADIUS * spread;
-}

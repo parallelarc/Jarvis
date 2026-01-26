@@ -106,7 +106,7 @@ export function useAnimationFrame(
  * @param fixedDelta - 固定时间步长（秒）
  * @returns 控制对象
  */
-export function useFixedTimestepAnimation(
+function useFixedTimestepAnimation(
   callback: (deltaTime: number) => void,
   fixedDelta = 1 / 60
 ) {

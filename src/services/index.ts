@@ -7,4 +7,4 @@ export * from './TouchDetectionService';
 export * from './DragInteractionService';
 export * from './ZoomInteractionService';
 export * from './RotationInteractionService';
-export * from './HandDrawingService';
+export * from './AutoResetService';
