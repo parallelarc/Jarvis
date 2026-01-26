@@ -88,7 +88,8 @@ export function processDragInteraction(
     callbacks.setPinching(side, isPinching, pinchDistance);
   }
 
-  const touchedId = findObjectUnderFinger(indexTip);
+  // 使用食指和拇指的中点（与视觉指示器 L/R 一致）
+  const touchedId = findObjectUnderFinger(indexTip, thumbTip);
 
   // === 捏合开始：记录手指下的对象和时间 ===
   if (pinchStart) {

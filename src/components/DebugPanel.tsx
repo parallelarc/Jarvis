@@ -6,6 +6,7 @@ import { createSignal, createMemo, Show, For } from 'solid-js';
 import { handStore } from '@/stores/handStore';
 import { objectStore, objectActions } from '@/stores/objectStore';
 import { calculateDistance } from '@/utils/math';
+import { getMediaPipeFps } from '@/hooks/useGestureTracking';
 import './DebugPanel.css';
 
 // 全局可见状态
@@ -31,6 +32,9 @@ export function DebugPanel() {
   const leftHand = createMemo(() => handStore.left);
   const rightHand = createMemo(() => handStore.right);
   const zoomMode = createMemo(() => handStore.zoomMode);
+
+  // MediaPipe FPS（独立于页面 FPS）
+  const mpFps = createMemo(() => getMediaPipeFps());
 
   // 分别订阅对象状态的各个字段
   const selectedObjectId = createMemo(() => objectStore.selectedObjectId);
@@ -127,6 +131,10 @@ export function DebugPanel() {
               <div class="debug-row">
                 <span>FPS:</span>
                 <span class="debug-value">{fps()}</span>
+              </div>
+              <div class="debug-row">
+                <span>MP-FPS:</span>
+                <span class="debug-value">{mpFps()}</span>
               </div>
               <div class="debug-row">
                 <span>Hands:</span>

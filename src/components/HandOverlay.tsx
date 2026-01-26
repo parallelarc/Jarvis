@@ -1,134 +1,120 @@
 /**
  * HandOverlay 组件
  * 显示手势追踪的 Canvas 叠加层
+ * 用圆点表示左右手位置
  */
 
 import { onMount, onCleanup } from 'solid-js';
 import { handStore } from '@/stores/handStore';
-import { HAND_CONNECTIONS } from '@/config';
 
 export function HandOverlay() {
   let canvasRef: HTMLCanvasElement | undefined;
   let ctx: CanvasRenderingContext2D | null = null;
+  let animationId: number | null = null;
 
   /**
-   * 绘制手部关键点和连接线
+   * 绘制手部圆点
    */
   function drawHands() {
-    if (!ctx || !canvasRef) return;
+    if (!canvasRef || !ctx) return;
+
+    const width = window.innerWidth;
+    const height = window.innerHeight;
 
     // 清空画布
-    ctx.clearRect(0, 0, canvasRef.width, canvasRef.height);
+    ctx.clearRect(0, 0, width, height);
 
-    // 绘制左手
+    // 绘制左手圆点（紫色）- 食指和拇指的中点位置
     if (handStore.left.active && handStore.left.landmarks) {
-      drawHandLandmarks(handStore.left.landmarks, '#a855f7', 'Left');
-    }
+      const indexTip = handStore.left.landmarks[8]; // 食指尖端
+      const thumbTip = handStore.left.landmarks[4]; // 拇指尖端
+      const x = ((indexTip.x + thumbTip.x) / 2) * width;
+      const y = ((indexTip.y + thumbTip.y) / 2) * height;
 
-    // 绘制右手
-    if (handStore.right.active && handStore.right.landmarks) {
-      drawHandLandmarks(handStore.right.landmarks, '#f97316', 'Right');
-    }
-
-    // 继续动画循环
-    requestAnimationFrame(drawHands);
-  }
-
-  /**
-   * 绘制单只手的关键点
-   */
-  function drawHandLandmarks(
-    landmarks: { x: number; y: number; z: number }[],
-    color: string,
-    side: 'Left' | 'Right'
-  ) {
-    if (!ctx || !canvasRef) return;
-
-    const width = canvasRef.width;
-    const height = canvasRef.height;
-
-    // 绘制连接线
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-
-    for (const connection of HAND_CONNECTIONS) {
-      const [start, end] = connection;
-      const startPoint = landmarks[start];
-      const endPoint = landmarks[end];
-
-      ctx.moveTo(startPoint.x * width, startPoint.y * height);
-      ctx.lineTo(endPoint.x * width, endPoint.y * height);
-    }
-
-    ctx.stroke();
-
-    // 绘制关键点
-    for (let i = 0; i < landmarks.length; i++) {
-      const landmark = landmarks[i];
-      let pointColor = '#ffffff';
-
-      // 右手食指端点（index 8）触摸到 bbox 时变为绿色
-      if (side === 'Right' && i === 8 && handStore.right.touchedObjectId) {
-        pointColor = '#00ff00';
-      }
-
-      ctx.fillStyle = pointColor;
+      // 外圈光晕
       ctx.beginPath();
-      ctx.arc(landmark.x * width, landmark.y * height, 3, 0, Math.PI * 2);
+      ctx.arc(x, y, 30, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(168, 85, 247, 0.4)';
       ctx.fill();
+
+      // 内圈
+      ctx.beginPath();
+      ctx.arc(x, y, 15, 0, Math.PI * 2);
+      ctx.fillStyle = '#a855f7';
+      ctx.fill();
+
+      // 标签
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('L', x, y);
     }
+
+    // 绘制右手圆点（橙色）- 食指和拇指的中点位置
+    if (handStore.right.active && handStore.right.landmarks) {
+      const indexTip = handStore.right.landmarks[8]; // 食指尖端
+      const thumbTip = handStore.right.landmarks[4]; // 拇指尖端
+      const x = ((indexTip.x + thumbTip.x) / 2) * width;
+      const y = ((indexTip.y + thumbTip.y) / 2) * height;
+
+      // 外圈光晕
+      ctx.beginPath();
+      ctx.arc(x, y, 30, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(249, 115, 22, 0.4)';
+      ctx.fill();
+
+      // 内圈
+      ctx.beginPath();
+      ctx.arc(x, y, 15, 0, Math.PI * 2);
+      ctx.fillStyle = '#f97316';
+      ctx.fill();
+
+      // 标签
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('R', x, y);
+    }
+
+    animationId = requestAnimationFrame(drawHands);
   }
 
   /**
-   * 处理窗口大小变化
+   * 设置 canvas 尺寸
    */
-  function handleResize() {
+  function setupCanvas() {
     if (!canvasRef) return;
-    const dpr = Math.min(window.devicePixelRatio, 2);
-    canvasRef.width = window.innerWidth * dpr;
-    canvasRef.height = window.innerHeight * dpr;
-    canvasRef.style.width = window.innerWidth + 'px';
-    canvasRef.style.height = window.innerHeight + 'px';
-    const ctx = canvasRef.getContext('2d');
-    if (ctx) {
-      ctx.scale(dpr, dpr);
-    }
+    canvasRef.width = window.innerWidth;
+    canvasRef.height = window.innerHeight;
+    ctx = canvasRef.getContext('2d');
   }
 
-  /**
-   * 组件挂载
-   */
   onMount(() => {
-    handleResize();
-    window.addEventListener('resize', handleResize);
-
-    // 获取 Canvas 上下文
-    if (canvasRef) {
-      ctx = canvasRef.getContext('2d');
-      drawHands();
-    }
+    setupCanvas();
+    window.addEventListener('resize', setupCanvas);
+    drawHands();
   });
 
-  /**
-   * 组件清理
-   */
   onCleanup(() => {
-    window.removeEventListener('resize', handleResize);
+    window.removeEventListener('resize', setupCanvas);
+    if (animationId !== null) {
+      cancelAnimationFrame(animationId);
+    }
   });
 
   return (
     <canvas
       ref={canvasRef}
-      class="hand-overlay"
       style={{
-        position: 'absolute',
+        position: 'fixed',
         top: '0',
         left: '0',
-        width: '100%',
-        height: '100%',
+        width: '100vw',
+        height: '100vh',
         'pointer-events': 'none',
-        'z-index': '10',
+        'z-index': '100',
         transform: 'scaleX(-1)',
       }}
     />

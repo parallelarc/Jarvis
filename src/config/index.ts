@@ -271,3 +271,13 @@ export const AUTO_RESET_CONFIG = {
   ANIMATION_DURATION_MS: 2000,   // 复位动画时长（2秒）
   EASING_TYPE: 'easeInOut' as EasingType,  // 缓动曲线类型
 } as const;
+
+// ============================================================================
+// MediaPipe 帧率控制配置
+// ============================================================================
+
+export const MEDIAPIPE_CONFIG = {
+  TARGET_FPS: 120,              // MediaPipe 目标帧率 (120Hz 显示器)
+  FRAME_INTERVAL_MS: 1000 / 120, // ~8.3ms
+  ENABLE_THROTTLING: true,       // 是否启用帧率节流
+} as const;

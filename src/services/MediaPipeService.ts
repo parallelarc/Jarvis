@@ -3,6 +3,8 @@
  * 负责 MediaPipe Hands 初始化和摄像头处理
  */
 
+import { MEDIAPIPE_CONFIG } from '@/config/index';
+
 // MediaPipe 类型声明
 declare global {
   interface Window {
@@ -22,6 +24,96 @@ declare global {
   }
 }
 
+/**
+ * 自定义帧采集器
+ * 解耦 MediaPipe 帧率与页面渲染帧率
+ */
+class CustomFrameSender {
+  private running = false;
+  private lastFrameTime = 0;
+  private animationFrameId: number | null = null;
+  private frameCount = 0;
+  private lastFpsUpdateTime = 0;
+  private currentFps = 0;
+  private onFpsUpdate?: (fps: number) => void;
+
+  /**
+   * 启动自定义帧采集循环
+   */
+  async start(
+    videoElement: HTMLVideoElement,
+    hands: any,
+    targetFps: number,
+    onFpsUpdate?: (fps: number) => void
+  ) {
+    this.running = true;
+    this.lastFrameTime = performance.now();
+    this.lastFpsUpdateTime = performance.now();
+    this.frameCount = 0;
+    this.onFpsUpdate = onFpsUpdate;
+    this.sendLoop(videoElement, hands, targetFps);
+  }
+
+  /**
+   * 帧采集循环 - 使用 requestAnimationFrame + 时间节流
+   */
+  private async sendLoop(
+    videoElement: HTMLVideoElement,
+    hands: any,
+    targetFps: number
+  ) {
+    if (!this.running) return;
+
+    const frameInterval = 1000 / targetFps;
+    const now = performance.now();
+    const elapsed = now - this.lastFrameTime;
+
+    // 时间节流：只在达到目标帧间隔时发送帧
+    if (elapsed >= frameInterval) {
+      this.lastFrameTime = now - (elapsed % frameInterval);
+
+      // 发送帧到 MediaPipe
+      await hands.send({ image: videoElement });
+
+      // 计算 FPS
+      this.frameCount++;
+      const fpsElapsed = now - this.lastFpsUpdateTime;
+      if (fpsElapsed >= 500) {  // 每 500ms 更新一次 FPS
+        this.currentFps = Math.round(this.frameCount * 1000 / fpsElapsed);
+        this.frameCount = 0;
+        this.lastFpsUpdateTime = now;
+        if (this.onFpsUpdate) {
+          this.onFpsUpdate(this.currentFps);
+        }
+      }
+    }
+
+    if (this.running) {
+      this.animationFrameId = requestAnimationFrame(() =>
+        this.sendLoop(videoElement, hands, targetFps)
+      );
+    }
+  }
+
+  /**
+   * 停止帧采集循环
+   */
+  stop() {
+    this.running = false;
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+  }
+
+  /**
+   * 获取当前 FPS
+   */
+  getCurrentFps(): number {
+    return this.currentFps;
+  }
+}
+
 export interface MediaPipeResult {
   multiHandLandmarks: Array<Array<{ x: number; y: number; z: number }>> | null;
   multiHandedness: Array<{ label: 'Left' | 'Right' }> | null;
@@ -32,12 +124,14 @@ export interface MediaPipeCallbacks {
   onFaceResults?: (position: { x: number; y: number }) => void;
   setStatus: (status: string) => void;
   onLoadingChange: (loading: boolean) => void;
+  onMediaPipeFpsUpdate?: (fps: number) => void;
 }
 
 export interface MediaPipeState {
   hands: any;
   faceMesh: any;
   camera: any;
+  customFrameSender: CustomFrameSender | null;
   canvasElement: HTMLCanvasElement | null;
   videoElement: HTMLVideoElement | null;
 }
@@ -69,6 +163,7 @@ export function createMediaPipeService(callbacks: MediaPipeCallbacks): MediaPipe
     hands: null,
     faceMesh: null,
     camera: null,
+    customFrameSender: null,
     canvasElement: null,
     videoElement: null,
   };
@@ -97,14 +192,9 @@ export function createMediaPipeService(callbacks: MediaPipeCallbacks): MediaPipe
     try {
       state.videoElement = document.getElementById('webcam') as HTMLVideoElement;
 
-      const existingCanvas = document.querySelector('.hand-overlay');
-      if (existingCanvas) {
-        state.canvasElement = existingCanvas as HTMLCanvasElement;
-      } else {
-        state.canvasElement = document.createElement('canvas');
-        document.body.appendChild(state.canvasElement);
-        state.canvasElement.className = 'hand-overlay';
-      }
+      // Canvas 绘制现在由 HandOverlay 组件处理，不再在此创建
+      // 保留 canvasElement 引用以兼容 updateCanvasSize 调用
+      state.canvasElement = document.querySelector('.hand-overlay-canvas') as HTMLCanvasElement || null;
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -118,6 +208,20 @@ export function createMediaPipeService(callbacks: MediaPipeCallbacks): MediaPipe
         state.videoElement.srcObject = stream;
         await new Promise(resolve => {
           state.videoElement!.onloadedmetadata = resolve;
+        });
+        // CustomFrameSender 需要视频播放，Camera API 之前自动处理了这个
+        // 等待视频真正开始播放
+        await state.videoElement.play();
+        // 确保 video.currentTime > 0，说明视频已经开始播放
+        await new Promise<void>(resolve => {
+          const checkTime = () => {
+            if (state.videoElement && state.videoElement.currentTime > 0) {
+              resolve();
+            } else {
+              requestAnimationFrame(checkTime);
+            }
+          };
+          checkTime();
         });
         updateCanvasToMatchVideo();
       }
@@ -186,20 +290,30 @@ export function createMediaPipeService(callbacks: MediaPipeCallbacks): MediaPipe
         await state.hands.initialize();
         state.hands.onResults(callbacks.onResults);
 
-        if (typeof window.Camera !== 'undefined') {
-          state.camera = new window.Camera(state.videoElement, {
-            onFrame: async () => {
-              const promises = [];
-              if (state.hands) promises.push(state.hands.send({ image: state.videoElement! }));
-              // FaceMesh 已禁用以提升性能
-              // if (state.faceMesh) promises.push(state.faceMesh.send({ image: state.videoElement! }));
-              await Promise.all(promises);
-            },
-            width: 640,   // 降低分辨率以提升性能：640x480 (原1920x1080)
-            height: 480,  // 页面显示分辨率通过CSS保持不变
-          });
-
-          await state.camera.start();
+        // 使用 CustomFrameSender 替代 window.Camera
+        // 解耦 MediaPipe 帧率与页面渲染帧率
+        if (MEDIAPIPE_CONFIG.ENABLE_THROTTLING) {
+          state.customFrameSender = new CustomFrameSender();
+          await state.customFrameSender.start(
+            state.videoElement,
+            state.hands,
+            MEDIAPIPE_CONFIG.TARGET_FPS,
+            callbacks.onMediaPipeFpsUpdate
+          );
+        } else {
+          // 降级到原始 Camera API（如果需要）
+          if (typeof window.Camera !== 'undefined') {
+            state.camera = new window.Camera(state.videoElement, {
+              onFrame: async () => {
+                const promises = [];
+                if (state.hands) promises.push(state.hands.send({ image: state.videoElement! }));
+                await Promise.all(promises);
+              },
+              width: 640,
+              height: 480,
+            });
+            await state.camera.start();
+          }
         }
       }
 
@@ -215,6 +329,10 @@ export function createMediaPipeService(callbacks: MediaPipeCallbacks): MediaPipe
    * 销毁服务
    */
   function destroy() {
+    if (state.customFrameSender) {
+      state.customFrameSender.stop();
+      state.customFrameSender = null;
+    }
     if (state.camera) {
       state.camera.stop();
     }

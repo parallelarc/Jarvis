@@ -23,6 +23,13 @@ import { processRotationInteraction } from '@/services/RotationInteractionServic
 import { autoResetService } from '@/services/AutoResetService';
 import type { Landmarks } from '@/core/types';
 
+// 全局 MediaPipe FPS 信号（供 DebugPanel 读取）
+const [mediaPipeFps, setMediaPipeFps] = createSignal(0);
+
+export function getMediaPipeFps() {
+  return mediaPipeFps();
+}
+
 export function useGestureTracking() {
   const [status, setStatus] = createSignal('Initializing MediaPipe...');
   const [isLoading, setIsLoading] = createSignal(true);
@@ -189,6 +196,7 @@ export function useGestureTracking() {
       // onFaceResults,  // 人脸追踪已禁用
       setStatus,
       onLoadingChange: setIsLoading,
+      onMediaPipeFpsUpdate: setMediaPipeFps,  // 更新 MediaPipe FPS
     };
 
     mediaPipeService = createMediaPipeService(callbacks);
@@ -207,7 +215,8 @@ export function useGestureTracking() {
    */
   onMount(() => {
     const checkLibs = () => {
-      if (typeof window.Hands !== 'undefined' && typeof window.Camera !== 'undefined') {
+      // 只需要检查 Hands，Camera API 已被 CustomFrameSender 替代
+      if (typeof window.Hands !== 'undefined') {
         initMediaPipe();
       } else {
         setTimeout(checkLibs, 100);
