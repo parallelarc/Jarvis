@@ -5,13 +5,13 @@
 
 import { createSignal, onMount, onCleanup } from 'solid-js';
 import { handStore, handActions } from '@/stores/handStore';
-// import { objectActions } from '@/stores/objectStore';  // 人脸追踪已禁用，暂时不需要
 import { detectHandGestures } from '@/domain/GestureDetector';
 import {
   createMediaPipeService,
   type MediaPipeCallbacks,
   type MediaPipeResult,
 } from '@/services/MediaPipeService';
+import { onFaceResults } from '@/services/FaceDetectionService';
 import { processTouchDetection } from '@/services/TouchDetectionService';
 import {
   processDragInteraction,
@@ -35,10 +35,6 @@ export function useGestureTracking() {
   const [isLoading, setIsLoading] = createSignal(true);
 
   let mediaPipeService: ReturnType<typeof createMediaPipeService> | null = null;
-
-  // 人脸追踪已禁用以提升性能，相关变量已移除
-  // let lastFaceX = 0;
-  // let lastFaceY = 0;
 
   /**
    * 根据优先级获取主手势名称
@@ -157,46 +153,15 @@ export function useGestureTracking() {
   }
 
   /**
-   * 处理面部追踪结果 (视差效果)
-   * 已禁用以提升性能
-   */
-  /*
-  function onFaceResults(position: { x: number; y: number } | undefined) {
-    if (!position || typeof position.x !== 'number' || typeof position.y !== 'number') {
-        return; // 忽略无效数据
-    }
-
-    // 性能优化：添加阈值检查 (Deadzone)
-    // 只有当移动幅度超过 0.005 (0.5%) 时才触发 Store 更新，过滤摄像头噪点
-    const threshold = 0.005;
-    if (Math.abs(position.x - lastFaceX) < threshold &&
-        Math.abs(position.y - lastFaceY) < threshold) {
-      return;
-    }
-
-    lastFaceX = position.x;
-    lastFaceY = position.y;
-
-    // 映射范围: -30度 到 30度
-    const maxAngle = 30 * (Math.PI / 180);
-    objectActions.setAllObjectsRotation({
-        x: position.y * maxAngle,
-        y: position.x * maxAngle,
-        z: 0
-    });
-  }
-  */
-
-  /**
    * 初始化 MediaPipe 服务
    */
   async function initMediaPipe() {
     const callbacks: MediaPipeCallbacks = {
       onResults,
-      // onFaceResults,  // 人脸追踪已禁用
+      onFaceResults,
       setStatus,
       onLoadingChange: setIsLoading,
-      onMediaPipeFpsUpdate: setMediaPipeFps,  // 更新 MediaPipe FPS
+      onMediaPipeFpsUpdate: setMediaPipeFps,
     };
 
     mediaPipeService = createMediaPipeService(callbacks);

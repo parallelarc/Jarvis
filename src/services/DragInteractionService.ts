@@ -14,6 +14,7 @@ import {
   syncAllSVGObjectsSelected,
 } from '@/utils/three-sync';
 import { findObjectUnderFinger } from './TouchDetectionService';
+import { getRotationMode } from '@/components/DebugPanel';
 
 export interface DragInteractionCallbacks {
   setWasPinching: (side: 'Left' | 'Right', wasPinching: boolean) => void;
@@ -66,6 +67,9 @@ export function processDragInteraction(
   callbacks: DragInteractionCallbacks,
   skipPinchStateUpdate: boolean = false
 ) {
+  // 检查旋转模式：在 Face 模式下禁用所有手势交互（拖拽、点击等）
+  if (getRotationMode() === 'face') return;
+
   const thumbTip = landmarks[4];
   const indexTip = landmarks[8];
   const pinchDistance = calculateDistance(

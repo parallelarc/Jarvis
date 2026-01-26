@@ -4,6 +4,7 @@
 
 import { createSignal, createMemo, Show, For } from 'solid-js';
 import { handStore } from '@/stores/handStore';
+import { faceStore, faceActions } from '@/stores/faceStore';
 import { objectStore, objectActions } from '@/stores/objectStore';
 import { calculateDistance } from '@/utils/math';
 import { getMediaPipeFps } from '@/hooks/useGestureTracking';
@@ -13,6 +14,8 @@ import './DebugPanel.css';
 const [visible, setVisible] = createSignal(false);
 // 全局 bbox 调试模式状态
 const [debugBBox, setDebugBBox] = createSignal(false);
+// 旋转模式：'gesture' | 'face' | 'none'
+const [rotationMode, setRotationMode] = createSignal<'gesture' | 'face' | 'none'>('gesture');
 
 export function toggleDebugPanel() {
   setVisible(v => !v);
@@ -25,6 +28,17 @@ export function getDebugBBoxState() {
 export function setDebugBBoxState(value: boolean) {
   setDebugBBox(value);
 }
+
+export function getRotationMode() {
+  return rotationMode();
+}
+
+export function setRotationModeValue(mode: 'gesture' | 'face' | 'none') {
+  setRotationMode(mode);
+}
+
+// 导出供其他模块使用
+export const rotationModeSignal = rotationMode;
 
 export function DebugPanel() {
   // 直接从 store 读取数据 - 使用 createMemo 确保响应式
@@ -57,6 +71,11 @@ export function DebugPanel() {
     if (rightHand().active) count++;
     return count;
   });
+
+  // 面部检测状态
+  const faceDetected = createMemo(() => faceStore.detected);
+  const facePosition = createMemo(() => ({ x: faceStore.x, y: faceStore.y }));
+  const faceEnabled = createMemo(() => faceStore.enabled);
 
   // FPS 计数
   const [fps, setFps] = createSignal(0);
@@ -151,6 +170,33 @@ export function DebugPanel() {
                   {debugBBox() ? 'ON' : 'OFF'}
                 </button>
               </div>
+              <div class="debug-row">
+                <span>Rotation Mode:</span>
+                <div style="display: flex; gap: 4px;">
+                  <button
+                    class="debug-toggle-btn"
+                    onClick={() => setRotationMode(rotationMode() === 'gesture' ? 'none' : 'gesture')}
+                    classList={{ active: rotationMode() === 'gesture' }}
+                  >
+                    Gesture
+                  </button>
+                  <button
+                    class="debug-toggle-btn"
+                    onClick={() => setRotationMode(rotationMode() === 'face' ? 'none' : 'face')}
+                    classList={{ active: rotationMode() === 'face' }}
+                  >
+                    Face
+                  </button>
+                </div>
+              </div>
+              <Show when={faceDetected() && rotationMode() === 'face'}>
+                <div class="debug-row">
+                  <span>Face Pos:</span>
+                  <span class="debug-value">
+                    ({facePosition().x.toFixed(2)}, {facePosition().y.toFixed(2)})
+                  </span>
+                </div>
+              </Show>
             </div>
 
             {/* 左手状态 */}

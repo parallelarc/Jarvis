@@ -180,12 +180,12 @@ console.log('[CONFIG] SVG_POSITION_CONFIG calculated:', SVG_POSITION_CONFIG);
 // ============================================================================
 
 export const DYNAMIC_BACKGROUND_CONFIG = {
-  // 主色调（来自 bg.svg 的深橙色 - 更有层次感）
-  PRIMARY_COLOR: { r: 250/255, g: 104/255, b: 55/255 },     // rgb(250,104,55) - 原始主色
-  // 中间色调（稍亮的橙色）
-  SECONDARY_COLOR: { r: 255/255, g: 140/255, b: 90/255 },   // 较亮的橙色
-  // 高光暖白色（中心亮部）
-  HIGHLIGHT_COLOR: { r: 255/255, g: 220/255, b: 200/255 },  // 更明显的暖白高光
+  // 主色调（橙棕色背景）
+  PRIMARY_COLOR: { r: 210/255, g: 70/255, b: 30/255 },       // 中深橙色
+  // 中间色调
+  SECONDARY_COLOR: { r: 240/255, g: 120/255, b: 60/255 },    // 亮橙色
+  // 高光色（更亮的高光，增强对比）
+  HIGHLIGHT_COLOR: { r: 255/255, g: 230/255, b: 180/255 },   // 亮金/浅杏色
 
   // 动画速度（流动效果 - 适中的速度）
   TIME_SCALE: 1.5,
@@ -262,4 +262,21 @@ export const MEDIAPIPE_CONFIG = {
   TARGET_FPS: 120,              // MediaPipe 目标帧率 (120Hz 显示器)
   FRAME_INTERVAL_MS: 1000 / 120, // ~8.3ms
   ENABLE_THROTTLING: true,       // 是否启用帧率节流
+} as const;
+
+// ============================================================================
+// 面部视差配置
+// ============================================================================
+
+export const FACE_PARALLAX_CONFIG = {
+  // SVG 元素旋转角度范围（弧度）
+  MAX_ROTATION_Y: 0.52,     // 约 30°，人脸左/右移时的最大旋转角度（增大）
+  MAX_ROTATION_X: 0.2,      // 约 11.5°，人脸上/下移时的最大旋转角度（增大）
+
+  // 平滑插值参数
+  SMOOTHING_FACTOR: 0.08,   // LERP 系数（0.01-1.0），越小越平滑
+
+  // 性能优化
+  DEADZONE_THRESHOLD: 0.02, // 死区阈值，过滤微小抖动
+  FACE_TIMEOUT_MS: 2000,    // 面部丢失超时（2秒后复位）
 } as const;

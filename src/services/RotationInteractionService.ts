@@ -9,6 +9,7 @@ import { GESTURE_CONFIG, ROTATION_CONFIG } from '@/config';
 import { normalizedToWorld, calculateDistance } from '@/utils/math';
 import { calculateDynamicPinchThreshold, calculatePalmSize } from '@/domain/GestureDetector';
 import { syncSVGObjectRotation } from '@/utils/three-sync';
+import { getRotationMode } from '@/components/DebugPanel';
 
 export interface RotationInteractionCallbacks {
   setWasPinching: (side: 'Left' | 'Right', wasPinching: boolean) => void;
@@ -115,6 +116,9 @@ export function processRotationInteraction(
 ) {
   // 仅处理左手旋转
   if (side !== 'Left') return;
+
+  // 检查旋转模式：只有在 gesture 模式下才启用手势旋转
+  if (getRotationMode() !== 'gesture') return;
 
   const thumbTip = landmarks[4];
   const indexTip = landmarks[8];

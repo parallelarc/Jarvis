@@ -1,9 +1,10 @@
 /**
  * MediaPipe 服务
- * 负责 MediaPipe Hands 初始化和摄像头处理
+ * 负责 MediaPipe Hands 和 FaceDetection 初始化和摄像头处理
  */
 
 import { MEDIAPIPE_CONFIG } from '@/config/index';
+import { initFaceDetection, onFaceResults, getFaceDetection } from '@/services/FaceDetectionService';
 
 // MediaPipe 类型声明
 declare global {
@@ -27,6 +28,7 @@ declare global {
 /**
  * 自定义帧采集器
  * 解耦 MediaPipe 帧率与页面渲染帧率
+ * 支持同时处理 Hands 和 FaceDetection
  */
 class CustomFrameSender {
   private running = false;
@@ -43,6 +45,7 @@ class CustomFrameSender {
   async start(
     videoElement: HTMLVideoElement,
     hands: any,
+    faceDetection: any = null,
     targetFps: number,
     onFpsUpdate?: (fps: number) => void
   ) {
@@ -51,7 +54,7 @@ class CustomFrameSender {
     this.lastFpsUpdateTime = performance.now();
     this.frameCount = 0;
     this.onFpsUpdate = onFpsUpdate;
-    this.sendLoop(videoElement, hands, targetFps);
+    this.sendLoop(videoElement, hands, faceDetection, targetFps);
   }
 
   /**
@@ -60,6 +63,7 @@ class CustomFrameSender {
   private async sendLoop(
     videoElement: HTMLVideoElement,
     hands: any,
+    faceDetection: any,
     targetFps: number
   ) {
     if (!this.running) return;
@@ -72,8 +76,15 @@ class CustomFrameSender {
     if (elapsed >= frameInterval) {
       this.lastFrameTime = now - (elapsed % frameInterval);
 
-      // 发送帧到 MediaPipe
-      await hands.send({ image: videoElement });
+      // 并行发送帧到 Hands 和 FaceDetection
+      const promises: Promise<any>[] = [];
+      if (hands) {
+        promises.push(hands.send({ image: videoElement }));
+      }
+      if (faceDetection) {
+        promises.push(faceDetection.send({ image: videoElement }));
+      }
+      await Promise.all(promises);
 
       // 计算 FPS
       this.frameCount++;
@@ -90,7 +101,7 @@ class CustomFrameSender {
 
     if (this.running) {
       this.animationFrameId = requestAnimationFrame(() =>
-        this.sendLoop(videoElement, hands, targetFps)
+        this.sendLoop(videoElement, hands, faceDetection, targetFps)
       );
     }
   }
@@ -130,6 +141,7 @@ export interface MediaPipeCallbacks {
 export interface MediaPipeState {
   hands: any;
   faceMesh: any;
+  faceDetection: any;
   camera: any;
   customFrameSender: CustomFrameSender | null;
   canvasElement: HTMLCanvasElement | null;
@@ -162,6 +174,7 @@ export function createMediaPipeService(callbacks: MediaPipeCallbacks): MediaPipe
   const state: MediaPipeState = {
     hands: null,
     faceMesh: null,
+    faceDetection: null,
     camera: null,
     customFrameSender: null,
     canvasElement: null,
@@ -290,6 +303,15 @@ export function createMediaPipeService(callbacks: MediaPipeCallbacks): MediaPipe
         await state.hands.initialize();
         state.hands.onResults(callbacks.onResults);
 
+        // 初始化 FaceDetection
+        await initFaceDetection();
+        state.faceDetection = getFaceDetection();
+
+        // 设置 FaceDetection 回调
+        if (state.faceDetection && callbacks.onFaceResults) {
+          state.faceDetection.onResults(callbacks.onFaceResults);
+        }
+
         // 使用 CustomFrameSender 替代 window.Camera
         // 解耦 MediaPipe 帧率与页面渲染帧率
         if (MEDIAPIPE_CONFIG.ENABLE_THROTTLING) {
@@ -297,6 +319,7 @@ export function createMediaPipeService(callbacks: MediaPipeCallbacks): MediaPipe
           await state.customFrameSender.start(
             state.videoElement,
             state.hands,
+            state.faceDetection,
             MEDIAPIPE_CONFIG.TARGET_FPS,
             callbacks.onMediaPipeFpsUpdate
           );
@@ -344,6 +367,10 @@ export function createMediaPipeService(callbacks: MediaPipeCallbacks): MediaPipe
     }
     if (state.faceMesh) {
       state.faceMesh.close();
+    }
+    if (state.faceDetection) {
+      state.faceDetection.close();
+      state.faceDetection = null;
     }
   }
 
