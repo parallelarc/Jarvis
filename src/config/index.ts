@@ -198,20 +198,67 @@ console.log('[CONFIG] SVG_POSITION_CONFIG calculated:', SVG_POSITION_CONFIG);
 // ============================================================================
 
 export const DYNAMIC_BACKGROUND_CONFIG = {
-  // 主色调（保持原有橙色）
-  PRIMARY_COLOR: { r: 250/255, g: 104/255, b: 55/255 },
-  // 辅助暖黄色（高光部分）- 增强亮度，接近米白色
-  SECONDARY_COLOR: { r: 255/255, g: 240/255, b: 200/255 },
-  // 暗部颜色（边缘阴影）- 加深，接近深红褐色
-  SHADOW_COLOR: { r: 120/255, g: 40/255, b: 20/255 },
+  // 主色调（来自 bg.svg 的深橙色 - 更有层次感）
+  PRIMARY_COLOR: { r: 250/255, g: 104/255, b: 55/255 },     // rgb(250,104,55) - 原始主色
+  // 中间色调（稍亮的橙色）
+  SECONDARY_COLOR: { r: 255/255, g: 140/255, b: 90/255 },   // 较亮的橙色
+  // 高光暖白色（中心亮部）
+  HIGHLIGHT_COLOR: { r: 255/255, g: 220/255, b: 200/255 },  // 更明显的暖白高光
 
-  // 动画速度（越小越慢）
-  TIME_SCALE: 5,
+  // 动画速度（流动效果 - 适中的速度）
+  TIME_SCALE: 1.5,
+
+  // 光照方向（左上到右下）
+  LIGHT_DIRECTION: { x: -0.707, y: 0.707 },  // 归一化的左上方向向量
 
   // 几何配置
   PLANE_Z: -1,  // 背景平面在 SVG 对象后面
   PLANE_SIZE: 25,  // 覆盖整个视野
 } as const;
+
+// ============================================================================
+// SVG 对象初始状态配置
+// 统一管理所有 SVG 对象的初始位置、旋转、缩放
+// ============================================================================
+
+export interface Vector3D {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface SVGObjectInitialState {
+  position: Vector3D;
+  scale: number;
+  rotation: Vector3D;
+  selected: boolean;
+}
+
+export const SVG_OBJECT_CONFIG = {
+  // 初始旋转角度（弧度）- 正对镜头
+  DEFAULT_ROTATION: { x: 0, y: 0, z: 0 } as Vector3D,
+
+  // 初始缩放
+  DEFAULT_SCALE: 1.0,
+
+  // 初始位置（默认为原点）
+  DEFAULT_POSITION: { x: 0, y: 0, z: 0 } as Vector3D,
+} as const;
+
+/**
+ * 获取 SVG 对象的初始状态
+ * @param override 可选的覆盖配置
+ * @returns SVG 对象的初始状态
+ */
+export function getSVGObjectInitialState(override?: Partial<SVGObjectInitialState>): SVGObjectInitialState {
+  return {
+    position: { ...SVG_OBJECT_CONFIG.DEFAULT_POSITION },
+    scale: SVG_OBJECT_CONFIG.DEFAULT_SCALE,
+    rotation: { ...SVG_OBJECT_CONFIG.DEFAULT_ROTATION },
+    selected: false,
+    ...override,
+  };
+}
 
 // ============================================================================
 // 自动复位配置

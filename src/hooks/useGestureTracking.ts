@@ -19,7 +19,7 @@ import {
 } from '@/services/DragInteractionService';
 import { processScaleInteraction } from '@/services/ZoomInteractionService';
 import { processRotationInteraction } from '@/services/RotationInteractionService';
-import { drawHands } from '@/services/HandDrawingService';
+// import { drawHands } from '@/services/HandDrawingService';  // 已禁用，由 HandOverlay 统一管理
 import { autoResetService } from '@/services/AutoResetService';
 import type { Landmarks } from '@/core/types';
 
@@ -63,13 +63,9 @@ export function useGestureTracking() {
    * 处理 MediaPipe 结果
    */
   function onResults(results: MediaPipeResult) {
-    const canvas = mediaPipeService?.getCanvas();
+    // 注意：手部骨架绘制由 HandOverlay 组件统一管理
+    // 不需要在此处获取 Canvas 上下文
     mediaPipeService?.updateCanvasSize();
-
-    const ctx = canvas?.getContext('2d');
-    if (ctx && canvas) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
       setStatus(`${results.multiHandLandmarks.length} hand(s) detected`);
@@ -136,10 +132,9 @@ export function useGestureTracking() {
         }
       });
 
-      // 绘制手部
-      if (ctx) {
-        drawHands(ctx, results);
-      }
+      // 注意：手部骨架绘制由 HandOverlay 组件统一管理
+      // 不在此处调用 drawHands，避免与 HandOverlay 的 Canvas 冲突
+      // HandOverlay 使用独立的 requestAnimationFrame 循环，支持左右手不同颜色
 
       // 检查自动复位
       autoResetService.checkHandsState();

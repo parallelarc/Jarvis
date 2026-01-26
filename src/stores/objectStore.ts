@@ -5,7 +5,7 @@
 
 import { createStore, produce } from 'solid-js/store';
 import type { Vector3D } from '@/core/types';
-import { INTERACTION_CONFIG } from '@/config';
+import { INTERACTION_CONFIG, getSVGObjectInitialState } from '@/config';
 import { syncSVGObjectPosition, syncAllSVGObjectsSelected } from '@/utils/three-sync';
 
 export interface ObjectState {
@@ -23,13 +23,14 @@ export type ObjectStoreState = {
   initialScales: Record<string, number>;
 };
 
+// 使用配置文件统一管理初始状态
 const initialObjects: Record<string, ObjectState> = {
-  v: { position: { x: 0, y: 0, z: 0 }, scale: 1.0, rotation: { x: Math.PI / 12, y: -Math.PI / 6, z: 0 }, selected: false },
-  b: { position: { x: 0, y: 0, z: 0 }, scale: 1.0, rotation: { x: Math.PI / 12, y: -Math.PI / 6, z: 0 }, selected: false },
-  o: { position: { x: 0, y: 0, z: 0 }, scale: 1.0, rotation: { x: Math.PI / 12, y: -Math.PI / 6, z: 0 }, selected: false },
-  t: { position: { x: 0, y: 0, z: 0 }, scale: 1.0, rotation: { x: Math.PI / 12, y: -Math.PI / 6, z: 0 }, selected: false },
-  flower: { position: { x: 0, y: 0, z: 0 }, scale: 1.0, rotation: { x: Math.PI / 12, y: -Math.PI / 6, z: 0 }, selected: false },
-  bot: { position: { x: 0, y: 0, z: 0 }, scale: 1.0, rotation: { x: Math.PI / 12, y: -Math.PI / 6, z: 0 }, selected: false },
+  v: getSVGObjectInitialState(),
+  b: getSVGObjectInitialState(),
+  o: getSVGObjectInitialState(),
+  t: getSVGObjectInitialState(),
+  flower: getSVGObjectInitialState(),
+  bot: getSVGObjectInitialState(),
 };
 
 const initialState: ObjectStoreState = {

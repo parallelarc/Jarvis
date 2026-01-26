@@ -5,7 +5,7 @@
 
 import type * as THREE from 'three';
 import type { SVGSize, SVGShapeData } from './SVGRegistry';
-import { INTERACTION_CONFIG } from '@/config';
+import { INTERACTION_CONFIG, SVG_OBJECT_CONFIG } from '@/config';
 import { THREE as THREE_GLOBAL } from '@/utils/three';
 
 export interface SVGObjectConfig {
@@ -148,9 +148,10 @@ export class SVGObject {
     // 应用缩放和翻转Y轴
     this.mesh.scale.set(scaleFactor, -scaleFactor, scaleFactor);
 
-    // 添加旋转让3D效果更明显（从右侧面看）
-    this.mesh.rotation.y = -Math.PI / 6; // 绕Y轴旋转-30度
-    this.mesh.rotation.x = Math.PI / 12; // 绕X轴轻微旋转15度
+    // 设置初始旋转角度（从配置文件读取）
+    this.mesh.rotation.y = SVG_OBJECT_CONFIG.DEFAULT_ROTATION.y;
+    this.mesh.rotation.x = SVG_OBJECT_CONFIG.DEFAULT_ROTATION.x;
+    this.mesh.rotation.z = SVG_OBJECT_CONFIG.DEFAULT_ROTATION.z;
   }
 
 
