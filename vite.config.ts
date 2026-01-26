@@ -15,7 +15,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          'three': ['three', 'three/addons/loaders/SVGLoader.js', 'three/addons/libs/fflate.min.js'],
+          'three': ['three', 'three/addons/loaders/SVGLoader.js'],
         },
       },
     },
