@@ -47,10 +47,3 @@
 }
 
 /* Note: Debug panel styles have been moved to src/components/DebugPanel.css */
-
-/* 手部骨架绘制 canvas */
-.hand-overlay {
-  position: fixed;
-  pointer-events: none;
-  z-index: 50;
-}

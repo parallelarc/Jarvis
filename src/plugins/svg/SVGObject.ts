@@ -296,10 +296,17 @@ export class SVGObject {
 
   /**
    * 检查点是否在对象内
+   * 添加命中容差以提高点击灵敏度
    */
   containsPoint(point: THREE.Vector3): boolean {
     const bounds = this.getBounds();
-    return bounds.containsPoint(point);
+
+    // 添加命中容差（扩大 bbox 提高点击灵敏度）
+    const hitMargin = 0.3; // 世界坐标单位，约等于 bbox 的 3%
+    const expandedBounds = bounds.clone();
+    expandedBounds.expandByScalar(hitMargin);
+
+    return expandedBounds.containsPoint(point);
   }
 
   /**
