@@ -28,24 +28,24 @@ export function HandOverlay() {
     if (handStore.left.active && handStore.left.landmarks) {
       const indexTip = handStore.left.landmarks[8]; // 食指尖端
       const thumbTip = handStore.left.landmarks[4]; // 拇指尖端
-      const x = ((indexTip.x + thumbTip.x) / 2) * width;
+      const x = width - ((indexTip.x + thumbTip.x) / 2) * width; // 镜像 x 坐标
       const y = ((indexTip.y + thumbTip.y) / 2) * height;
 
       // 外圈光晕
       ctx.beginPath();
-      ctx.arc(x, y, 30, 0, Math.PI * 2);
+      ctx.arc(x, y, 20, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(168, 85, 247, 0.4)';
       ctx.fill();
 
       // 内圈
       ctx.beginPath();
-      ctx.arc(x, y, 15, 0, Math.PI * 2);
+      ctx.arc(x, y, 10, 0, Math.PI * 2);
       ctx.fillStyle = '#a855f7';
       ctx.fill();
 
       // 标签
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 16px sans-serif';
+      ctx.font = 'bold 12px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('L', x, y);
@@ -55,24 +55,24 @@ export function HandOverlay() {
     if (handStore.right.active && handStore.right.landmarks) {
       const indexTip = handStore.right.landmarks[8]; // 食指尖端
       const thumbTip = handStore.right.landmarks[4]; // 拇指尖端
-      const x = ((indexTip.x + thumbTip.x) / 2) * width;
+      const x = width - ((indexTip.x + thumbTip.x) / 2) * width; // 镜像 x 坐标
       const y = ((indexTip.y + thumbTip.y) / 2) * height;
 
       // 外圈光晕
       ctx.beginPath();
-      ctx.arc(x, y, 30, 0, Math.PI * 2);
+      ctx.arc(x, y, 20, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(249, 115, 22, 0.4)';
       ctx.fill();
 
       // 内圈
       ctx.beginPath();
-      ctx.arc(x, y, 15, 0, Math.PI * 2);
+      ctx.arc(x, y, 10, 0, Math.PI * 2);
       ctx.fillStyle = '#f97316';
       ctx.fill();
 
       // 标签
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 16px sans-serif';
+      ctx.font = 'bold 12px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('R', x, y);
@@ -115,7 +115,6 @@ export function HandOverlay() {
         height: '100vh',
         'pointer-events': 'none',
         'z-index': '100',
-        transform: 'scaleX(-1)',
       }}
     />
   );

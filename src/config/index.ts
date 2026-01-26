@@ -18,7 +18,10 @@ export const PARTICLE_CONFIG = {
 // ============================================================================
 
 export const GESTURE_CONFIG = {
-  PINCH_THRESHOLD: 0.05,  // 捏合阈值（降低以避免远距离误判）
+  PINCH_THRESHOLD: 0.05,  // 固定阈值（已弃用，保留作为后备）
+  PINCH_THRESHOLD_RATIO: 0.35,  // 自适应阈值系数（手掌尺寸 × 系数）
+  PINCH_THRESHOLD_MIN: 0.02,    // 最小阈值（防止手太近时过于敏感）
+  PINCH_THRESHOLD_MAX: 0.12,    // 最大阈值（防止手太远时无法触发）
   BOUNDARY_Y: 4.5,
 } as const;
 

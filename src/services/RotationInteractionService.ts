@@ -7,11 +7,12 @@ import { handStore } from '@/stores/handStore';
 import { objectStore, objectActions } from '@/stores/objectStore';
 import { GESTURE_CONFIG, ROTATION_CONFIG } from '@/config';
 import { normalizedToWorld, calculateDistance } from '@/utils/math';
+import { calculateDynamicPinchThreshold, calculatePalmSize } from '@/domain/GestureDetector';
 import { syncSVGObjectRotation } from '@/utils/three-sync';
 
 export interface RotationInteractionCallbacks {
   setWasPinching: (side: 'Left' | 'Right', wasPinching: boolean) => void;
-  setPinching: (side: 'Left' | 'Right', isPinching: boolean, distance: number) => void;
+  setPinching: (side: 'Left' | 'Right', isPinching: boolean, distance: number, dynamicThreshold?: number, palmSize?: number) => void;
   setRotating: (side: 'Left' | 'Right', isRotating: boolean) => void;
   setRotationBasePosition: (side: 'Left' | 'Right', position: { x: number; y: number; z: number }) => void;
   setBaseRotation: (side: 'Left' | 'Right', rotation: { x: number; y: number; z: number }) => void;
@@ -82,9 +83,9 @@ function updateObjectRotation(id: string, palmCenter: { x: number; y: number }) 
 
   // 映射位移到旋转角度（无极旋转，无角度限制）
   // X轴位移 → Y轴旋转（左右转）
-  // Y轴位移 → X轴旋转（上下倾）
+  // Y轴位移 → X轴旋转（上下倾），取反以符合直觉
   const newRotation = {
-    x: baseRotation.x + deltaY * ROTATION_CONFIG.POSITION_TO_ANGLE_RATIO,
+    x: baseRotation.x - deltaY * ROTATION_CONFIG.POSITION_TO_ANGLE_RATIO,
     y: baseRotation.y + deltaX * ROTATION_CONFIG.POSITION_TO_ANGLE_RATIO,
     z: baseRotation.z,  // 保持 Z 轴旋转不变
   };
@@ -121,7 +122,11 @@ export function processRotationInteraction(
     { x: thumbTip.x, y: thumbTip.y, z: thumbTip.z },
     { x: indexTip.x, y: indexTip.y, z: indexTip.z }
   );
-  const isPinching = pinchDistance < GESTURE_CONFIG.PINCH_THRESHOLD;
+
+  // 使用自适应捏合阈值
+  const dynamicThreshold = calculateDynamicPinchThreshold(landmarks);
+  const palmSize = calculatePalmSize(landmarks);
+  const isPinching = pinchDistance < dynamicThreshold;
 
   const handState = handStore.left;
   const currentSelectedId = objectStore.selectedObjectId;
@@ -132,7 +137,7 @@ export function processRotationInteraction(
 
   // 更新 pinch 状态（在 processDragInteraction 读取之后执行）
   callbacks.setWasPinching(side, isPinching);
-  callbacks.setPinching(side, isPinching, pinchDistance);
+  callbacks.setPinching(side, isPinching, pinchDistance, dynamicThreshold, palmSize);
 
   // === 捏合开始：开始旋转 ===
   if (pinchStart) {

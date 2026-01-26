@@ -279,10 +279,21 @@ function HandInfo(props: { hand: typeof handStore.left | typeof handStore.right 
             <span class="debug-value">{hand().pinchingFinger}</span>
           </div>
         </Show>
-        <Show when={hand().isPinching}>
+        <Show when={hand().isPinching || hand().palmSize > 0}>
           <div class="debug-row">
             <span>Pinch Distance:</span>
             <span class="debug-value">{hand().pinchDistance.toFixed(4)}</span>
+          </div>
+        </Show>
+        {/* 自适应阈值调试信息 */}
+        <Show when={hand().palmSize > 0}>
+          <div class="debug-row">
+            <span>Palm Size:</span>
+            <span class="debug-value">{hand().palmSize.toFixed(4)}</span>
+          </div>
+          <div class="debug-row">
+            <span>Dynamic Threshold:</span>
+            <span class="debug-value">{hand().dynamicThreshold.toFixed(4)}</span>
           </div>
         </Show>
         {/* Finger states */}

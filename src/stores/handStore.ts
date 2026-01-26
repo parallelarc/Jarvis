@@ -20,6 +20,9 @@ export type ExtendedHandState = HandState & {
   pinchStartObjectId: string | null;  // 捏合开始时手指下的对象 ID
   pinchStartTime: number;             // 捏合开始的时间戳（用于判断点击是否"干脆"）
   wasPinching: boolean;               // 上一帧的捏合状态（用于检测边沿）
+  // 自适应阈值调试信息
+  dynamicThreshold: number;           // 当前计算出的动态捏合阈值
+  palmSize: number;                   // 当前手掌尺寸（用于调试）
   // bbox 触摸检测
   touchedObjectId: string | null;     // 当前食指触摸到的对象 ID（基于 bbox）
   // 旋转交互状态（左手专用）
@@ -40,6 +43,7 @@ function createInitialHandState(side: HandSide): ExtendedHandState {
     isRotating: false,  // 旋转状态初始值
     pinchDistance: 0,
     currentGesture: null,
+    dragOffset: null,
     fingersExtended: {
       thumb: false,
       index: false,
@@ -54,6 +58,9 @@ function createInitialHandState(side: HandSide): ExtendedHandState {
     pinchStartObjectId: null,
     pinchStartTime: 0,
     wasPinching: false,
+    // 自适应阈值调试信息初始值
+    dynamicThreshold: 0,
+    palmSize: 0,
     // bbox 触摸检测初始值
     touchedObjectId: null,
   };
@@ -114,10 +121,16 @@ export const handActions = {
     setHandStore(key, 'isSelected', selected);
   },
 
-  setPinching(side: HandSide, pinching: boolean, distance: number) {
+  setPinching(side: HandSide, pinching: boolean, distance: number, dynamicThreshold?: number, palmSize?: number) {
     const key = sideToKey(side);
     setHandStore(key, 'isPinching', pinching);
     setHandStore(key, 'pinchDistance', distance);
+    if (dynamicThreshold !== undefined) {
+      setHandStore(key, 'dynamicThreshold', dynamicThreshold);
+    }
+    if (palmSize !== undefined) {
+      setHandStore(key, 'palmSize', palmSize);
+    }
   },
 
   setDragOffset(side: HandSide, offset: Vector3D | null) {

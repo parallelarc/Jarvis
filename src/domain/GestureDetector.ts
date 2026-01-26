@@ -39,6 +39,8 @@ export interface PinchStates {
   thumbMiddle: { isPinching: boolean; distance: number };
   thumbRing: { isPinching: boolean; distance: number };
   thumbPinky: { isPinching: boolean; distance: number };
+  dynamicThreshold: number;  // 当前计算出的动态阈值
+  palmSize: number;          // 当前手掌尺寸（用于调试）
 }
 
 export interface PalmInfo {
@@ -277,40 +279,72 @@ const FINGER_PINCH_INDICES = {
 export type PinchingFinger = keyof typeof FINGER_PINCH_INDICES;
 
 /**
+ * 计算手掌尺寸（手腕到中指根部的距离）
+ * 用作自适应捏合阈值的参考尺度
+ */
+export function calculatePalmSize(landmarks: Landmarks): number {
+  // 手腕(0) 到 中指MCP(9) 的距离作为手掌尺寸
+  return calculateDistance(landmarks[0], landmarks[9]);
+}
+
+/**
+ * 计算自适应捏合阈值
+ * 根据手掌尺寸动态调整阈值，适应不同距离
+ */
+export function calculateDynamicPinchThreshold(landmarks: Landmarks): number {
+  const palmSize = calculatePalmSize(landmarks);
+  const { PINCH_THRESHOLD_RATIO, PINCH_THRESHOLD_MIN, PINCH_THRESHOLD_MAX } = GESTURE_CONFIG;
+
+  // 动态阈值 = 手掌尺寸 × 比例系数
+  const dynamicThreshold = palmSize * PINCH_THRESHOLD_RATIO;
+
+  // 边界保护：限制在最小和最大阈值之间
+  return Math.max(PINCH_THRESHOLD_MIN, Math.min(PINCH_THRESHOLD_MAX, dynamicThreshold));
+}
+
+/**
  * 检测拇指与指定手指是否捏合（通用函数）
  * @param landmarks - 手部关键点
  * @param finger - 要检测的手指 ('index' | 'middle' | 'ring' | 'pinky')
+ * @param threshold - 可选的覆盖阈值（如不提供则使用自适应阈值）
  * @returns 是否捏合
  */
 export function isThumbPinching(
   landmarks: Landmarks,
-  finger: PinchingFinger
+  finger: PinchingFinger,
+  threshold?: number
 ): boolean {
-  return calculateDistance(landmarks[4], landmarks[FINGER_PINCH_INDICES[finger]])
-    < GESTURE_CONFIG.PINCH_THRESHOLD;
+  // 使用提供的阈值，或计算自适应阈值
+  const pinchThreshold = threshold ?? calculateDynamicPinchThreshold(landmarks);
+  return calculateDistance(landmarks[4], landmarks[FINGER_PINCH_INDICES[finger]]) < pinchThreshold;
 }
 
 /**
  * 获取所有捏合状态
  */
 export function getAllPinchStates(landmarks: Landmarks): PinchStates {
+  const palmSize = calculatePalmSize(landmarks);
+  const dynamicThreshold = calculateDynamicPinchThreshold(landmarks);
+
   return {
     thumbIndex: {
-      isPinching: isThumbPinching(landmarks, 'index'),
+      isPinching: isThumbPinching(landmarks, 'index', dynamicThreshold),
       distance: calculateDistance(landmarks[4], landmarks[8]),
     },
     thumbMiddle: {
-      isPinching: isThumbPinching(landmarks, 'middle'),
+      isPinching: isThumbPinching(landmarks, 'middle', dynamicThreshold),
       distance: calculateDistance(landmarks[4], landmarks[12]),
     },
     thumbRing: {
-      isPinching: isThumbPinching(landmarks, 'ring'),
+      isPinching: isThumbPinching(landmarks, 'ring', dynamicThreshold),
       distance: calculateDistance(landmarks[4], landmarks[16]),
     },
     thumbPinky: {
-      isPinching: isThumbPinching(landmarks, 'pinky'),
+      isPinching: isThumbPinching(landmarks, 'pinky', dynamicThreshold),
       distance: calculateDistance(landmarks[4], landmarks[20]),
     },
+    dynamicThreshold,
+    palmSize,
   };
 }
 

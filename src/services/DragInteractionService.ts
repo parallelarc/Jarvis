@@ -7,6 +7,7 @@ import { handStore } from '@/stores/handStore';
 import { objectStore, objectActions } from '@/stores/objectStore';
 import { GESTURE_CONFIG, INTERACTION_CONFIG } from '@/config';
 import { normalizedToWorld, calculateDistance } from '@/utils/math';
+import { calculateDynamicPinchThreshold, calculatePalmSize } from '@/domain/GestureDetector';
 import {
   syncSVGObjectPosition,
   syncSVGObjectSelected,
@@ -16,7 +17,7 @@ import { findObjectUnderFinger } from './TouchDetectionService';
 
 export interface DragInteractionCallbacks {
   setWasPinching: (side: 'Left' | 'Right', wasPinching: boolean) => void;
-  setPinching: (side: 'Left' | 'Right', isPinching: boolean, distance: number) => void;
+  setPinching: (side: 'Left' | 'Right', isPinching: boolean, distance: number, dynamicThreshold?: number, palmSize?: number) => void;
   setPinchStartObject: (side: 'Left' | 'Right', objectId: string | null) => void;
   setPinchStartTime: (side: 'Left' | 'Right', time: number) => void;
   setDragOffset: (side: 'Left' | 'Right', offset: { x: number; y: number; z: number } | null) => void;
@@ -71,7 +72,11 @@ export function processDragInteraction(
     { x: thumbTip.x, y: thumbTip.y, z: thumbTip.z },
     { x: indexTip.x, y: indexTip.y, z: indexTip.z }
   );
-  const isPinching = pinchDistance < GESTURE_CONFIG.PINCH_THRESHOLD;
+
+  // 使用自适应捏合阈值
+  const dynamicThreshold = calculateDynamicPinchThreshold(landmarks);
+  const palmSize = calculatePalmSize(landmarks);
+  const isPinching = pinchDistance < dynamicThreshold;
 
   const handState = side === 'Left' ? handStore.left : handStore.right;
   const currentSelectedId = objectStore.selectedObjectId;
@@ -85,7 +90,7 @@ export function processDragInteraction(
   // 更新上一帧状态（右手更新，左手跳过因为由旋转服务管理）
   if (!skipPinchStateUpdate) {
     callbacks.setWasPinching(side, isPinching);
-    callbacks.setPinching(side, isPinching, pinchDistance);
+    callbacks.setPinching(side, isPinching, pinchDistance, dynamicThreshold, palmSize);
   }
 
   // 使用食指和拇指的中点（与视觉指示器 L/R 一致）
