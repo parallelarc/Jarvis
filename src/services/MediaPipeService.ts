@@ -276,20 +276,7 @@ export function createMediaPipeService(callbacks: MediaPipeCallbacks): MediaPipe
       if (typeof window.Hands !== 'undefined') {
         state.hands = new window.Hands({
           locateFile: (file: string) => {
-            const localFiles = [
-              'hands_solution_packed_assets.data',
-              'hands_solution_packed_assets.fileset',
-              'hands_solution_packed_assets_loader.js',
-              'hands_solution_simd_wasm_bin.js',
-              'hands_solution_simd_wasm_bin.wasm',
-              'hands_solution_similarity_calculator.data',
-              'hands.binarypb',
-              'hand_landmark_full.tflite',
-            ];
-            if (localFiles.includes(file)) {
-              return `./models/hands/${file}`;
-            }
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            return `./models/hands/${file}`;
           },
         });
 

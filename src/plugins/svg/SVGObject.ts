@@ -265,6 +265,11 @@ export class SVGObject {
     this.mesh.rotation.set(rotation.x, rotation.y, rotation.z);
     this.hitPlane.rotation.set(rotation.x, rotation.y, rotation.z);
 
+    // DEBUG: 输出旋转值
+    if (this.id === 'v' && Math.abs(rotation.y) > 0.05) {
+      console.log('[SVGObject]', this.id, 'mesh.rotation:', this.mesh.rotation);
+    }
+
     this.syncBoundingBoxVisuals();
   }
 

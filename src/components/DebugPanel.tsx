@@ -8,6 +8,7 @@ import { faceStore, faceActions } from '@/stores/faceStore';
 import { objectStore, objectActions } from '@/stores/objectStore';
 import { calculateDistance } from '@/utils/math';
 import { getMediaPipeFps } from '@/hooks/useGestureTracking';
+import { getFaceDetectionFps } from '@/services/FaceDetectionService';
 import './DebugPanel.css';
 
 // 全局可见状态
@@ -49,6 +50,9 @@ export function DebugPanel() {
 
   // MediaPipe FPS（独立于页面 FPS）
   const mpFps = createMemo(() => getMediaPipeFps());
+
+  // FaceDetection FPS
+  const faceFps = createMemo(() => getFaceDetectionFps());
 
   // 分别订阅对象状态的各个字段
   const selectedObjectId = createMemo(() => objectStore.selectedObjectId);
@@ -155,6 +159,10 @@ export function DebugPanel() {
               <div class="debug-row">
                 <span>MP-FPS:</span>
                 <span class="debug-value">{mpFps()}</span>
+              </div>
+              <div class="debug-row">
+                <span>Face-FPS:</span>
+                <span class="debug-value">{faceFps()}</span>
               </div>
               <div class="debug-row">
                 <span>Hands:</span>

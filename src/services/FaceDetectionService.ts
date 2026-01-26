@@ -26,7 +26,7 @@ export async function initFaceDetection(): Promise<void> {
 
   faceDetection = new window.FaceDetection({
     locateFile: (file: string) => {
-      return `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`;
+      return `./models/face_detection/${file}`;
     },
   });
 
@@ -39,13 +39,33 @@ export async function initFaceDetection(): Promise<void> {
   console.log('[FaceDetection] 初始化完成');
 }
 
+// 人脸检测 FPS 计数
+let faceFrameCount = 0;
+let faceLastFpsTime = performance.now();
+let faceFps = 0;
+
 /**
  * 处理面部检测结果
  */
 export function onFaceResults(results: any): void {
+  // 计算 FaceDetection 独立 FPS
+  faceFrameCount++;
+  const now = performance.now();
+  if (now - faceLastFpsTime >= 500) {
+    faceFps = Math.round(faceFrameCount * 1000 / (now - faceLastFpsTime));
+    faceFrameCount = 0;
+    faceLastFpsTime = now;
+  }
+
   // 检查旋转模式：只有在 face 模式下才启用面部视差
-  if (getRotationMode() !== 'face') {
+  const rotationMode = getRotationMode();
+  if (rotationMode !== 'face') {
     return;
+  }
+
+  // DEBUG: 每60帧输出一次检测结果
+  if (!faceStore.detected || Math.random() < 0.02) {
+    console.log('[FaceDetection] rotationMode:', rotationMode, 'detections:', results.detections?.length);
   }
 
   if (results.detections && results.detections.length > 0) {
@@ -55,6 +75,11 @@ export function onFaceResults(results: any): void {
     const bbox = detection.boundingBox;
     const centerX = bbox.xCenter;
     const centerY = bbox.yCenter;
+
+    // DEBUG: 输出面部位置
+    if (Math.random() < 0.05) {  // 偶尔输出
+      console.log('[FaceDetection] Face position:', { x: centerX.toFixed(3), y: centerY.toFixed(3) });
+    }
 
     // 更新 store
     faceActions.setFacePosition(centerX, centerY);
@@ -81,7 +106,7 @@ function lerp(a: number, b: number, t: number): number {
 
 /**
  * 应用视差旋转到所有 SVG 对象
- * 统一旋转模式：整个场景随视角一起转动，营造全息台效果
+ * 所有对象沿各自中轴旋转相同的角度
  */
 function applyParallaxToObjects(faceRotation: { x: number; y: number }) {
   const sceneAPI = (window as any).svgSceneAPI;
@@ -91,37 +116,45 @@ function applyParallaxToObjects(faceRotation: { x: number; y: number }) {
   if (!svgObjects) return;
 
   // 人脸位置（归一化 0-1）- 相对于画面中心的偏移
-  // 画面中心是 (0.5, 0.5)，计算偏移量
-  const faceX = faceStore.x - 0.5;  // -0.5 到 +0.5，左负右正
-  const faceY = faceStore.y - 0.5;  // -0.5 到 +0.5，上负下正
+  const faceX = faceStore.x - 0.5;
+  const faceY = faceStore.y - 0.5;
 
-  // 统一旋转角度（所有元素相同）
-  const parallaxStrength = 1.2;  // 旋转强度
+  const parallaxStrength = 1.2;
   const targetRotX = -faceY * parallaxStrength * FACE_PARALLAX_CONFIG.MAX_ROTATION_X;
   const targetRotY = -faceX * parallaxStrength * FACE_PARALLAX_CONFIG.MAX_ROTATION_Y;
 
-  // 获取当前缓存的旋转值（用于平滑插值）
-  const currentRot = objectRotationCache.get('all') || { x: 0, y: 0 };
+  // DEBUG: 输出旋转目标值
+  if (Math.abs(faceX) > 0.05 || Math.abs(faceY) > 0.05) {
+    console.log('[Parallax] Target rotation:', { faceX: faceX.toFixed(3), faceY: faceY.toFixed(3), targetRotX: targetRotX.toFixed(3), targetRotY: targetRotY.toFixed(3) });
+  }
 
-  // 平滑插值
-  const smoothedRot = {
-    x: lerp(currentRot.x, targetRotX, 0.15),
-    y: lerp(currentRot.y, targetRotY, 0.15)
-  };
-  objectRotationCache.set('all', smoothedRot);
-
-  const finalRotation = {
-    x: smoothedRot.x,
-    y: smoothedRot.y,
-    z: 0
-  };
-
-  // 应用统一旋转到所有对象
+  // 所有对象旋转相同的角度
   svgObjects.forEach((obj: any, id: string) => {
-    if (obj && obj.setRotation) {
-      objectActions.updateObjectRotation(id, finalRotation);
-      obj.setRotation(finalRotation);
+    if (!obj || !obj.setRotation) return;
+
+    // 获取当前旋转缓存
+    const currentRot = objectRotationCache.get(id) || { x: 0, y: 0 };
+
+    // 平滑插值
+    const smoothedRot = {
+      x: lerp(currentRot.x, targetRotX, 0.15),
+      y: lerp(currentRot.y, targetRotY, 0.15)
+    };
+    objectRotationCache.set(id, smoothedRot);
+
+    const finalRotation = {
+      x: smoothedRot.x,
+      y: smoothedRot.y,
+      z: 0
+    };
+
+    // DEBUG: 输出最终旋转值
+    if (id === 'v' && Math.abs(targetRotY) > 0.05) {
+      console.log('[Parallax] Applying rotation to', id, ':', finalRotation);
     }
+
+    objectActions.updateObjectRotation(id, finalRotation);
+    obj.setRotation(finalRotation);
   });
 }
 
@@ -148,8 +181,10 @@ function resetParallax() {
       obj.setRotation(zeroRotation);
     }
   });
-  // 清理缓存
-  objectRotationCache.set('all', { x: 0, y: 0 });
+  // 清理所有对象的缓存
+  svgObjects.forEach((_obj: any, id: string) => {
+    objectRotationCache.set(id, { x: 0, y: 0 });
+  });
 }
 
 /**
@@ -157,4 +192,11 @@ function resetParallax() {
  */
 export function getFaceDetection(): any {
   return faceDetection;
+}
+
+/**
+ * 获取 FaceDetection FPS
+ */
+export function getFaceDetectionFps(): number {
+  return faceFps;
 }
