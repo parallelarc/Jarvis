@@ -95,6 +95,69 @@ js/
 5. 举手挥动触发"HELLO"文字特效
 6. 按 `D` 键查看调试信息
 
+## MediaPipe 模型下载
+
+项目使用 MediaPipe 进行手势和面部检测，模型文件已本地化存储以提升加载速度和稳定性。
+
+### 当前已本地化的模型
+
+| 模型 | 目录 |
+|------|------|
+| MediaPipe Hands | `public/models/hands/` |
+| MediaPipe FaceDetection | `public/models/face_detection/` |
+| MediaPipe FaceMesh | `public/models/face_mesh/` |
+
+### 手动下载模型
+
+如需重新下载或更新模型文件，从 jsDelivr CDN 获取：
+
+```bash
+# MediaPipe FaceDetection 模型
+mkdir -p public/models/face_detection
+
+curl -o public/models/face_detection/face_detection_short_range.tflite \
+  https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection_short_range.tflite
+
+curl -o public/models/face_detection/face_detection_short.binarypb \
+  https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection_short.binarypb
+
+curl -o public/models/face_detection/face_detection_solution_simd_wasm_bin.wasm \
+  https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection_solution_simd_wasm_bin.wasm
+
+curl -o public/models/face_detection/face_detection_solution_simd_wasm_bin.js \
+  https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection_solution_simd_wasm_bin.js
+```
+
+```bash
+# MediaPipe Hands 模型
+mkdir -p public/models/hands
+
+curl -o public/models/hands/hands_solution_packed_assets.fileset \
+  https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands_solution_packed_assets.fileset
+
+curl -o public/models/hands/hand_landmark_full.tflite \
+  https://cdn.jsdelivr.net/npm/@mediapipe/hands/hand_landmark_full.tflite
+
+curl -o public/models/hands/hands_solution_simd_wasm_bin.wasm \
+  https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands_solution_simd_wasm_bin.wasm
+
+curl -o public/models/hands/hands_solution_simd_wasm_bin.js \
+  https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands_solution_simd_wasm_bin.js
+```
+
+### 库文件下载
+
+```bash
+# MediaPipe 库文件
+mkdir -p public/models/libs
+
+curl -o public/models/libs/face_detection.js \
+  https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js
+
+curl -o public/models/libs/hands.js \
+  https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js
+```
+
 ## 许可证
 
 MIT License
