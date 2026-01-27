@@ -279,4 +279,49 @@ export const FACE_PARALLAX_CONFIG = {
   // 性能优化
   DEADZONE_THRESHOLD: 0.02, // 死区阈值，过滤微小抖动
   FACE_TIMEOUT_MS: 2000,    // 面部丢失超时（2秒后复位）
+
+  // 视差参数
+  PARALLAX_STRENGTH: 3.0,   // 视差强度，控制相机移动范围
+  Y_AXIS_MULTIPLIER: 0.5,   // Y轴视差强度系数（上下移动幅度稍小）
+  CENTER_OFFSET: 0.5,       // 归一化坐标中心点
+} as const;
+
+// ============================================================================
+// 手部覆盖层配置
+// ============================================================================
+
+export const HAND_OVERLAY_CONFIG = {
+  // 左手样式
+  LEFT_HAND: {
+    PRIMARY: '#a855f7',           // 紫色
+    GLOW: 'rgba(168, 85, 247, 0.4)',
+    LABEL: 'L',
+  },
+  // 右手样式
+  RIGHT_HAND: {
+    PRIMARY: '#f97316',           // 橙色
+    GLOW: 'rgba(249, 115, 22, 0.4)',
+    LABEL: 'R',
+  },
+  // 圆点半径
+  OUTER_RADIUS: 20,
+  INNER_RADIUS: 10,
+  // 字体
+  FONT: 'bold 12px sans-serif',
+} as const;
+
+// ============================================================================
+// 全息板配置
+// ============================================================================
+
+export const HOLOGRAM_CONFIG = {
+  // 边缘框
+  EDGE_MARGIN: 0.2,               // 边缘边距
+  EDGE_THICKNESS: 0.3,            // 边缘厚度（Z轴）
+  EDGE_OPACITY: 0,                // 边缘透明度（隐藏）
+  EDGE_COLOR: 0x00D9FF,           // 边缘颜色（科技蓝）
+  // 侧面框
+  SIDE_THICKNESS: 0.02,           // 侧框本身的厚度
+  SIDE_COLOR: 0x001a33,           // 侧面颜色（深蓝）
+  SIDE_OPACITY: 0,                // 侧面透明度（隐藏）
 } as const;

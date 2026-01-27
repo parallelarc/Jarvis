@@ -5,10 +5,9 @@
 
 import { handStore } from '@/stores/handStore';
 import { objectStore, objectActions } from '@/stores/objectStore';
-import { GESTURE_CONFIG, ROTATION_CONFIG } from '@/config';
+import { ROTATION_CONFIG } from '@/config';
 import { normalizedToWorld, calculateDistance } from '@/utils/math';
 import { calculateDynamicPinchThreshold, calculatePalmSize } from '@/domain/GestureDetector';
-import { syncSVGObjectRotation } from '@/utils/three-sync';
 import { getRotationMode } from '@/components/DebugPanel';
 
 export interface RotationInteractionCallbacks {

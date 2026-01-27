@@ -7,7 +7,7 @@ import { onMount, onCleanup, untrack, createEffect } from 'solid-js';
 import { objectStore, objectActions } from '@/stores/objectStore';
 import { SVGRegistry, SVG_OBJECT_IDS } from '@/plugins/svg/SVGRegistry';
 import { SVGObject } from '@/plugins/svg/SVGObject';
-import { CAMERA_CONFIG, SVG_LAYOUT_CONFIG, SVG_POSITION_CONFIG, DESIGN_CONFIG } from '@/config';
+import { CAMERA_CONFIG, SVG_LAYOUT_CONFIG, SVG_POSITION_CONFIG, DESIGN_CONFIG, HOLOGRAM_CONFIG } from '@/config';
 import { DynamicBackground } from '@/plugins/background/DynamicBackground';
 import { THREE } from '@/utils/three';
 
@@ -20,6 +20,12 @@ export function SVGScene() {
 
   // SVG 对象集合
   const svgObjects = new Map<string, SVGObject>();
+
+  // 全息板父容器 - 所有 SVG 对象的统一旋转容器
+  let hologramGroup: any = null;
+
+  // 全息板边缘框 - 显示厚度视觉效果
+  let hologramEdges: any = null;
 
   // 动态背景
   let dynamicBackground: DynamicBackground | null = null;
@@ -90,6 +96,11 @@ export function SVGScene() {
     rimLight.lookAt(0, 0, 0);
     scene.add(rimLight);
 
+    // 创建全息板父容器 - 所有 SVG 对象都将添加到这个 Group
+    // 这样可以实现整体旋转效果，而不是每个对象单独旋转
+    hologramGroup = new THREE.Group();
+    scene.add(hologramGroup);
+
     // 初始化 SVG 对象
     initSVGObjects();
 
@@ -152,8 +163,8 @@ export function SVGScene() {
         });
 
         svgObjects.set(id, svgObj);
-        scene.add(svgObj.mesh);
-        scene.add(svgObj.hitPlane);
+        hologramGroup.add(svgObj.mesh);
+        scene.add(svgObj.hitPlane);  // hitPlane 仍需添加到 scene，因为它需要独立进行射线检测
 
         console.log(`[SVGScene] ${id}: pos=(${x.toFixed(2)}, ${y.toFixed(2)}) baseScale=${baseScale.toFixed(2)}`);
 
@@ -188,6 +199,9 @@ export function SVGScene() {
       ));
 
       console.log(`[SVGScene] Initialized ${svgObjects.size} SVG objects with custom sizes`);
+
+      // 创建全息板边缘框
+      createHologramEdges();
     } catch (error) {
       console.error('[SVGScene] Error initializing SVG objects:', error);
       console.error('[SVGScene] Error details:', {
@@ -196,6 +210,108 @@ export function SVGScene() {
         name: (error as Error).name
       });
     }
+  }
+
+  /**
+   * 创建全息板边缘框 - 显示厚度视觉效果
+   * 计算所有元素的整体边界，创建一个带厚度的边缘框
+   */
+  function createHologramEdges() {
+    if (!hologramGroup) return;
+
+    // 计算所有元素的整体边界
+    const overallBox = new (window.THREE as any).Box3();
+    svgObjects.forEach((obj) => {
+      const bounds = obj.getBounds();
+      overallBox.union(bounds);
+    });
+
+    // 添加边距
+    overallBox.min.x -= HOLOGRAM_CONFIG.EDGE_MARGIN;
+    overallBox.min.y -= HOLOGRAM_CONFIG.EDGE_MARGIN;
+    overallBox.max.x += HOLOGRAM_CONFIG.EDGE_MARGIN;
+    overallBox.max.y += HOLOGRAM_CONFIG.EDGE_MARGIN;
+
+    // 定义厚度（Z轴方向）
+    const thickness = HOLOGRAM_CONFIG.EDGE_THICKNESS;
+    overallBox.min.z = -thickness / 2;
+    overallBox.max.z = thickness / 2;
+
+    // 创建边缘几何体 - 使用 LineSegments 显示边框
+    const edgesGeometry = new (window.THREE as any).EdgesGeometry(
+      new (window.THREE as any).BoxGeometry(
+        overallBox.max.x - overallBox.min.x,
+        overallBox.max.y - overallBox.min.y,
+        thickness
+      )
+    );
+
+    // 计算中心点
+    const centerX = (overallBox.min.x + overallBox.max.x) / 2;
+    const centerY = (overallBox.min.y + overallBox.max.y) / 2;
+
+    // 创建边缘材质 - 半透明发光效果
+    const edgesMaterial = new (window.THREE as any).LineBasicMaterial({
+      color: HOLOGRAM_CONFIG.EDGE_COLOR,
+      transparent: true,
+      opacity: HOLOGRAM_CONFIG.EDGE_OPACITY,
+    });
+
+    hologramEdges = new (window.THREE as any).LineSegments(edgesGeometry, edgesMaterial);
+    hologramEdges.position.set(centerX, centerY, 0);
+
+    // 添加到全息板容器
+    hologramGroup.add(hologramEdges);
+
+    // 创建侧面 - 显示厚度
+    createHologramSides(overallBox, thickness);
+
+    console.log('[SVGScene] Hologram edges created with bounds:', overallBox);
+  }
+
+  /**
+   * 创建全息板侧面 - 显示厚度视觉效果
+   */
+  function createHologramSides(bounds: any, thickness: number) {
+    const width = bounds.max.x - bounds.min.x;
+    const height = bounds.max.y - bounds.min.y;
+    const centerX = (bounds.min.x + bounds.max.x) / 2;
+    const centerY = (bounds.min.y + bounds.max.y) / 2;
+
+    // 创建侧面材质 - 半透明深色
+    const sideMaterial = new (window.THREE as any).MeshBasicMaterial({
+      color: HOLOGRAM_CONFIG.SIDE_COLOR,
+      transparent: true,
+      opacity: HOLOGRAM_CONFIG.SIDE_OPACITY,
+      side: (window.THREE as any).DoubleSide,
+    });
+
+    // 创建四个侧面（左、右、上、下）
+    const sideThickness = HOLOGRAM_CONFIG.SIDE_THICKNESS;
+
+    // 左侧框
+    const leftGeo = new (window.THREE as any).BoxGeometry(sideThickness, height, thickness);
+    const leftSide = new (window.THREE as any).Mesh(leftGeo, sideMaterial);
+    leftSide.position.set(bounds.min.x, centerY, 0);
+    hologramGroup.add(leftSide);
+
+    // 右侧框
+    const rightGeo = new (window.THREE as any).BoxGeometry(sideThickness, height, thickness);
+    const rightSide = new (window.THREE as any).Mesh(rightGeo, sideMaterial);
+    rightSide.position.set(bounds.max.x, centerY, 0);
+    hologramGroup.add(rightSide);
+
+    // 上侧框
+    const topGeo = new (window.THREE as any).BoxGeometry(width + sideThickness * 2, sideThickness, thickness);
+    const topSide = new (window.THREE as any).Mesh(topGeo, sideMaterial);
+    topSide.position.set(centerX, bounds.max.y, 0);
+    hologramGroup.add(topSide);
+
+    // 下侧框
+    const bottomGeo = new (window.THREE as any).BoxGeometry(width + sideThickness * 2, sideThickness, thickness);
+    const bottomSide = new (window.THREE as any).Mesh(bottomGeo, sideMaterial);
+    bottomSide.position.set(centerX, bounds.min.y, 0);
+    hologramGroup.add(bottomSide);
   }
 
   /**
@@ -318,6 +434,14 @@ export function SVGScene() {
   }
 
   /**
+   * 获取全息板容器（供外部使用）
+   * 面部视差效果通过旋转这个容器实现整体旋转
+   */
+  function getHologramGroup() {
+    return hologramGroup;
+  }
+
+  /**
    * 窗口大小调整
    */
   function handleResize() {
@@ -343,6 +467,7 @@ export function SVGScene() {
           getScene,
           getCamera,
           getSVGObjects,
+          getHologramGroup,
           setSelectedWithScene: (id: string, selected: boolean) => {
             const obj = svgObjects.get(id);
             if (obj) {

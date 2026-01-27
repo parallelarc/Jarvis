@@ -5,7 +5,7 @@
 
 import { handStore } from '@/stores/handStore';
 import { objectStore, objectActions } from '@/stores/objectStore';
-import { GESTURE_CONFIG, INTERACTION_CONFIG } from '@/config';
+import { INTERACTION_CONFIG } from '@/config';
 import { normalizedToWorld, calculateDistance } from '@/utils/math';
 import { calculateDynamicPinchThreshold, calculatePalmSize } from '@/domain/GestureDetector';
 import {

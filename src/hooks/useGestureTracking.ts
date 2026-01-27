@@ -19,7 +19,6 @@ import {
 } from '@/services/DragInteractionService';
 import { processScaleInteraction } from '@/services/ZoomInteractionService';
 import { processRotationInteraction } from '@/services/RotationInteractionService';
-// import { drawHands } from '@/services/HandDrawingService';  // 已禁用，由 HandOverlay 统一管理
 import { autoResetService } from '@/services/AutoResetService';
 import type { Landmarks } from '@/core/types';
 

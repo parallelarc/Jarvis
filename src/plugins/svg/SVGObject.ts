@@ -96,9 +96,9 @@ export class SVGObject {
    * 构建 3D 几何体
    */
   private build3DGeometry() {
-    // Extrude Settings - 禁用倒角以保持低多边形数
+    // Extrude Settings - 增加深度让元素更厚
     const extrudeSettings = {
-      depth: 200, // 大深度，但不增加多边形
+      depth: 1000, // 深度，影响元素厚度
       bevelEnabled: false  // 禁用倒角，避免多边形爆炸
     };
 

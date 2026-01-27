@@ -6,6 +6,7 @@
 
 import { onMount, onCleanup } from 'solid-js';
 import { handStore } from '@/stores/handStore';
+import { HAND_OVERLAY_CONFIG } from '@/config';
 
 export function HandOverlay() {
   let canvasRef: HTMLCanvasElement | undefined;
@@ -33,22 +34,22 @@ export function HandOverlay() {
 
       // 外圈光晕
       ctx.beginPath();
-      ctx.arc(x, y, 20, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(168, 85, 247, 0.4)';
+      ctx.arc(x, y, HAND_OVERLAY_CONFIG.OUTER_RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = HAND_OVERLAY_CONFIG.LEFT_HAND.GLOW;
       ctx.fill();
 
       // 内圈
       ctx.beginPath();
-      ctx.arc(x, y, 10, 0, Math.PI * 2);
-      ctx.fillStyle = '#a855f7';
+      ctx.arc(x, y, HAND_OVERLAY_CONFIG.INNER_RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = HAND_OVERLAY_CONFIG.LEFT_HAND.PRIMARY;
       ctx.fill();
 
       // 标签
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 12px sans-serif';
+      ctx.font = HAND_OVERLAY_CONFIG.FONT;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('L', x, y);
+      ctx.fillText(HAND_OVERLAY_CONFIG.LEFT_HAND.LABEL, x, y);
     }
 
     // 绘制右手圆点（橙色）- 食指和拇指的中点位置
@@ -60,22 +61,22 @@ export function HandOverlay() {
 
       // 外圈光晕
       ctx.beginPath();
-      ctx.arc(x, y, 20, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(249, 115, 22, 0.4)';
+      ctx.arc(x, y, HAND_OVERLAY_CONFIG.OUTER_RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = HAND_OVERLAY_CONFIG.RIGHT_HAND.GLOW;
       ctx.fill();
 
       // 内圈
       ctx.beginPath();
-      ctx.arc(x, y, 10, 0, Math.PI * 2);
-      ctx.fillStyle = '#f97316';
+      ctx.arc(x, y, HAND_OVERLAY_CONFIG.INNER_RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = HAND_OVERLAY_CONFIG.RIGHT_HAND.PRIMARY;
       ctx.fill();
 
       // 标签
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 12px sans-serif';
+      ctx.font = HAND_OVERLAY_CONFIG.FONT;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('R', x, y);
+      ctx.fillText(HAND_OVERLAY_CONFIG.RIGHT_HAND.LABEL, x, y);
     }
 
     animationId = requestAnimationFrame(drawHands);

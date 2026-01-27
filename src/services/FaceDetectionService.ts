@@ -6,8 +6,9 @@
 
 import { faceStore, faceActions } from '@/stores/faceStore';
 import { objectActions } from '@/stores/objectStore';
-import { FACE_PARALLAX_CONFIG } from '@/config';
+import { FACE_PARALLAX_CONFIG, CAMERA_CONFIG } from '@/config';
 import { getRotationMode } from '@/components/DebugPanel';
+import { lerp } from '@/utils/math';
 
 // 类型声明
 declare global {
@@ -97,69 +98,48 @@ export function onFaceResults(results: any): void {
   }
 }
 
-/**
- * 线性插值
- */
-function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
-}
+// 旋转缓存（用于平滑插值）- 现在用于相机位置
+const cameraOffsetCache = { x: 0, y: 0 };
 
 /**
- * 应用视差旋转到所有 SVG 对象
- * 所有对象沿各自中轴旋转相同的角度
+ * 应用视差效果 - 通过移动相机位置模拟真实视角变化
+ * 全息板保持静止，相机围绕场景中心移动
  */
 function applyParallaxToObjects(faceRotation: { x: number; y: number }) {
   const sceneAPI = (window as any).svgSceneAPI;
   if (!sceneAPI) return;
 
-  const svgObjects = sceneAPI.getSVGObjects();
-  if (!svgObjects) return;
+  const camera = sceneAPI.getCamera();
+  if (!camera) return;
 
   // 人脸位置（归一化 0-1）- 相对于画面中心的偏移
-  const faceX = faceStore.x - 0.5;
-  const faceY = faceStore.y - 0.5;
+  const faceX = faceStore.x - FACE_PARALLAX_CONFIG.CENTER_OFFSET;
+  const faceY = faceStore.y - FACE_PARALLAX_CONFIG.CENTER_OFFSET;
 
-  const parallaxStrength = 1.2;
-  const targetRotX = -faceY * parallaxStrength * FACE_PARALLAX_CONFIG.MAX_ROTATION_X;
-  const targetRotY = -faceX * parallaxStrength * FACE_PARALLAX_CONFIG.MAX_ROTATION_Y;
+  // 视差强度 - 控制相机移动范围
+  const targetOffsetX = -faceX * FACE_PARALLAX_CONFIG.PARALLAX_STRENGTH;  // 人往右，相机往左，看到右侧
+  const targetOffsetY = faceY * FACE_PARALLAX_CONFIG.PARALLAX_STRENGTH * FACE_PARALLAX_CONFIG.Y_AXIS_MULTIPLIER;
 
-  // DEBUG: 输出旋转目标值
-  if (Math.abs(faceX) > 0.05 || Math.abs(faceY) > 0.05) {
-    console.log('[Parallax] Target rotation:', { faceX: faceX.toFixed(3), faceY: faceY.toFixed(3), targetRotX: targetRotX.toFixed(3), targetRotY: targetRotY.toFixed(3) });
-  }
+  // 平滑插值
+  const smoothedOffset = {
+    x: lerp(cameraOffsetCache.x, targetOffsetX, FACE_PARALLAX_CONFIG.SMOOTHING_FACTOR),
+    y: lerp(cameraOffsetCache.y, targetOffsetY, FACE_PARALLAX_CONFIG.SMOOTHING_FACTOR)
+  };
 
-  // 所有对象旋转相同的角度
-  svgObjects.forEach((obj: any, id: string) => {
-    if (!obj || !obj.setRotation) return;
+  // 更新缓存
+  cameraOffsetCache.x = smoothedOffset.x;
+  cameraOffsetCache.y = smoothedOffset.y;
 
-    // 获取当前旋转缓存
-    const currentRot = objectRotationCache.get(id) || { x: 0, y: 0 };
+  // 移动相机位置（保持 Z 轴距离不变）
+  // 相机围绕场景中心移动，始终看向中心
+  camera.position.x = smoothedOffset.x;
+  camera.position.y = smoothedOffset.y;
+  camera.lookAt(0, 0, 0);
 
-    // 平滑插值
-    const smoothedRot = {
-      x: lerp(currentRot.x, targetRotX, 0.15),
-      y: lerp(currentRot.y, targetRotY, 0.15)
-    };
-    objectRotationCache.set(id, smoothedRot);
-
-    const finalRotation = {
-      x: smoothedRot.x,
-      y: smoothedRot.y,
-      z: 0
-    };
-
-    // DEBUG: 输出最终旋转值
-    if (id === 'v' && Math.abs(targetRotY) > 0.05) {
-      console.log('[Parallax] Applying rotation to', id, ':', finalRotation);
-    }
-
-    objectActions.updateObjectRotation(id, finalRotation);
-    obj.setRotation(finalRotation);
-  });
+  // 同步更新 hitPlane 的位置（hitPlane 不在 hologramGroup 中，需要手动同步）
+  // 由于相机移动，hitPlane 的世界坐标不变，但射线检测的投影会变化
+  // Three.js 的 raycaster 会自动处理相机变换，所以不需要额外处理
 }
-
-// 每个对象的旋转缓存（用于平滑插值）
-const objectRotationCache = new Map<string, { x: number; y: number }>();
 
 /**
  * 复位视差效果
@@ -168,23 +148,27 @@ function resetParallax() {
   const sceneAPI = (window as any).svgSceneAPI;
   if (!sceneAPI) return;
 
+  const camera = sceneAPI.getCamera();
+  if (!camera) return;
+
+  // 复位相机位置到中心
+  camera.position.set(0, 0, CAMERA_CONFIG.CAMERA_Z);
+  camera.lookAt(0, 0, 0);
+
+  // 复位偏移缓存
+  cameraOffsetCache.x = 0;
+  cameraOffsetCache.y = 0;
+
+  // 复位每个对象的 rotation store
   const svgObjects = sceneAPI.getSVGObjects();
-  if (!svgObjects) return;
-
-  const zeroRotation = { x: 0, y: 0, z: 0 };
-
-  // 复位所有对象旋转到 0
-  svgObjects.forEach((obj: any, id: string) => {
-    if (obj && obj.setRotation) {
-      // 更新 Store 和 mesh
-      objectActions.updateObjectRotation(id, zeroRotation);
-      obj.setRotation(zeroRotation);
-    }
-  });
-  // 清理所有对象的缓存
-  svgObjects.forEach((_obj: any, id: string) => {
-    objectRotationCache.set(id, { x: 0, y: 0 });
-  });
+  if (svgObjects) {
+    svgObjects.forEach((obj: any) => {
+      if (obj.hitPlane) {
+        obj.hitPlane.rotation.set(0, 0, 0);
+      }
+      objectActions.updateObjectRotation(obj.id, { x: 0, y: 0, z: 0 });
+    });
+  }
 }
 
 /**

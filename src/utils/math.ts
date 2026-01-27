@@ -3,7 +3,7 @@
  */
 
 import type { Vector3D } from '@/core/types';
-import { VIEW_CONFIG, PARTICLE_CONFIG } from '@/config';
+import { VIEW_CONFIG } from '@/config';
 import { THREE } from './three';
 
 /**
