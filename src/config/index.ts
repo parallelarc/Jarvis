@@ -284,6 +284,11 @@ export const FACE_PARALLAX_CONFIG = {
   PARALLAX_STRENGTH: 3.0,   // 视差强度，控制相机移动范围
   Y_AXIS_MULTIPLIER: 0.5,   // Y轴视差强度系数（上下移动幅度稍小）
   CENTER_OFFSET: 0.5,       // 归一化坐标中心点
+
+  // 自动模式切换
+  AUTO_SWITCH_ENABLED: true,        // 是否启用自动模式切换
+  CENTER_THRESHOLD: 0.15,           // 正前方检测阈值（±0.15 即 0.35-0.65 范围为正前方）
+  MODE_SWITCH_COOLDOWN: 500,        // 模式切换冷却时间（毫秒），避免频繁切换
 } as const;
 
 // ============================================================================

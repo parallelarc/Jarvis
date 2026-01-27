@@ -14,7 +14,7 @@ import {
   syncAllSVGObjectsSelected,
 } from '@/utils/three-sync';
 import { findObjectUnderFinger } from './TouchDetectionService';
-import { getRotationMode } from '@/components/DebugPanel';
+import { isFaceInCenter } from './FaceDetectionService';
 
 export interface DragInteractionCallbacks {
   setWasPinching: (side: 'Left' | 'Right', wasPinching: boolean) => void;
@@ -67,8 +67,8 @@ export function processDragInteraction(
   callbacks: DragInteractionCallbacks,
   skipPinchStateUpdate: boolean = false
 ) {
-  // 检查旋转模式：在 Face 模式下禁用所有手势交互（拖拽、点击等）
-  if (getRotationMode() === 'face') return;
+  // 只有在面部正前方时才启用手势交互
+  if (!isFaceInCenter()) return;
 
   const thumbTip = landmarks[4];
   const indexTip = landmarks[8];

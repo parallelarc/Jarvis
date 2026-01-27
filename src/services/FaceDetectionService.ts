@@ -7,7 +7,6 @@
 import { faceStore, faceActions } from '@/stores/faceStore';
 import { objectActions } from '@/stores/objectStore';
 import { FACE_PARALLAX_CONFIG, CAMERA_CONFIG } from '@/config';
-import { getRotationMode } from '@/components/DebugPanel';
 import { lerp } from '@/utils/math';
 
 // 类型声明
@@ -18,6 +17,15 @@ declare global {
 }
 
 let faceDetection: any = null;
+
+/**
+ * 检查面部是否在正前方（用于控制手势交互）
+ */
+export function isFaceInCenter(): boolean {
+  if (!faceStore.detected) return false;
+  const distanceFromCenter = Math.abs(faceStore.x - FACE_PARALLAX_CONFIG.CENTER_OFFSET);
+  return distanceFromCenter < FACE_PARALLAX_CONFIG.CENTER_THRESHOLD;
+}
 
 /**
  * 初始化 FaceDetection
@@ -58,35 +66,30 @@ export function onFaceResults(results: any): void {
     faceLastFpsTime = now;
   }
 
-  // 检查旋转模式：只有在 face 模式下才启用面部视差
-  const rotationMode = getRotationMode();
-  if (rotationMode !== 'face') {
-    return;
-  }
-
-  // DEBUG: 每60帧输出一次检测结果
-  if (!faceStore.detected || Math.random() < 0.02) {
-    console.log('[FaceDetection] rotationMode:', rotationMode, 'detections:', results.detections?.length);
-  }
-
   if (results.detections && results.detections.length > 0) {
-    const detection = results.detections[0];
+    // 选择距离摄像头最近的人脸（边界框面积最大的）
+    let closestDetection = results.detections[0];
+    let maxArea = 0;
 
-    // 获取边界框中心点（归一化坐标 0-1）
+    for (const detection of results.detections) {
+      const bbox = detection.boundingBox;
+      const area = bbox.width * bbox.height;
+      if (area > maxArea) {
+        maxArea = area;
+        closestDetection = detection;
+      }
+    }
+
+    const detection = closestDetection;
     const bbox = detection.boundingBox;
     const centerX = bbox.xCenter;
     const centerY = bbox.yCenter;
 
-    // DEBUG: 输出面部位置
-    if (Math.random() < 0.05) {  // 偶尔输出
-      console.log('[FaceDetection] Face position:', { x: centerX.toFixed(3), y: centerY.toFixed(3) });
-    }
-
     // 更新 store
     faceActions.setFacePosition(centerX, centerY);
 
-    // 应用3D视差效果（每个对象独立计算）
-    applyParallaxToObjects({ x: 0, y: 0 }); // 参数不再使用，直接从 faceStore 读取
+    // 始终应用3D视差效果（不再受 rotationMode 限制）
+    applyParallaxToObjects({ x: 0, y: 0 });
 
   } else {
     // 未检测到人脸，检查是否超时复位

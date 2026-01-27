@@ -8,7 +8,7 @@ import { objectStore, objectActions } from '@/stores/objectStore';
 import { INTERACTION_CONFIG } from '@/config';
 import { calculateDistance } from '@/utils/math';
 import { syncSVGObjectScale } from '@/utils/three-sync';
-import { getRotationMode } from '@/components/DebugPanel';
+import { isFaceInCenter } from './FaceDetectionService';
 import type { Landmarks } from '@/core/types';
 
 /**
@@ -21,8 +21,8 @@ export function processScaleInteraction(
   leftLandmarks: Landmarks | null,
   rightLandmarks: Landmarks | null
 ) {
-  // 检查旋转模式：在 Face 模式下禁用所有手势交互
-  if (getRotationMode() === 'face') return;
+  // 只有在面部正前方时才启用手势缩放
+  if (!isFaceInCenter()) return;
 
   if (!leftLandmarks || !rightLandmarks) {
     if (handStore.zoomMode.active) {
