@@ -25,6 +25,9 @@ export interface DragInteractionCallbacks {
   setDragging: (side: 'Left' | 'Right', isDragging: boolean) => void;
 }
 
+// 用于追踪缩放模式状态的模块级变量
+let wasZoomModeActive = false;
+
 /**
  * 选中对象
  */
@@ -134,6 +137,11 @@ export function processDragInteraction(
       callbacks.setDragging(side, false);
       callbacks.setDragOffset(side, null);  // 清除偏移量
     }
+    // 关键修复：当右手松开时，重置缩放模式标志
+    // 这样下一次捏合才能正常开始拖拽
+    if (side === 'Right') {
+      wasZoomModeActive = false;
+    }
     return;
   }
 
@@ -142,7 +150,17 @@ export function processDragInteraction(
   // 不需要触摸到对象，无论手在屏幕任何位置都可以拖拽
   if (side === 'Right' && isPinching && currentSelectedId) {
     // 缩放模式下禁用拖拽
-    if (handStore.zoomMode.active) return;
+    if (handStore.zoomMode.active) {
+      wasZoomModeActive = true;
+      return;
+    }
+
+    // 关键修复：如果刚从缩放模式退出，需要等待右手完成一次"松开-捏合"周期
+    // 才能开始新的拖拽，避免对象闪现到右手位置
+    if (wasZoomModeActive) {
+      // 仍在等待右手松开
+      return;
+    }
 
     const sceneAPI = (window as any).svgSceneAPI;
     const camera = sceneAPI?.getCamera();

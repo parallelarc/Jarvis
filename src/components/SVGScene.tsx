@@ -3,6 +3,7 @@
  * 管理 Three.js 渲染和 SVG 对象显示
  */
 
+import type * as THREE_TYPE from 'three';
 import { onMount, onCleanup, untrack, createEffect } from 'solid-js';
 import { objectStore, objectActions } from '@/stores/objectStore';
 import { SVGRegistry, SVG_OBJECT_IDS } from '@/plugins/svg/SVGRegistry';
@@ -13,19 +14,19 @@ import { THREE } from '@/utils/three';
 
 export function SVGScene() {
   let sceneRef: HTMLDivElement | undefined;
-  let scene: any = null;
-  let camera: any = null;
-  let renderer: any = null;
+  let scene: THREE_TYPE.Scene | null = null;
+  let camera: THREE_TYPE.PerspectiveCamera | null = null;
+  let renderer: THREE_TYPE.WebGLRenderer | null = null;
   let animationFrameId: number | null = null;
 
   // SVG 对象集合
   const svgObjects = new Map<string, SVGObject>();
 
   // 全息板父容器 - 所有 SVG 对象的统一旋转容器
-  let hologramGroup: any = null;
+  let hologramGroup: THREE_TYPE.Group | null = null;
 
   // 全息板边缘框 - 显示厚度视觉效果
-  let hologramEdges: any = null;
+  let hologramEdges: THREE_TYPE.LineSegments | null = null;
 
   // 动态背景
   let dynamicBackground: DynamicBackground | null = null;
@@ -63,43 +64,43 @@ export function SVGScene() {
       CAMERA_CONFIG.CAMERA_NEAR,
       CAMERA_CONFIG.CAMERA_FAR
     );
-    camera.position.z = CAMERA_CONFIG.CAMERA_Z;
+    camera!.position.z = CAMERA_CONFIG.CAMERA_Z;
 
     // 渲染器
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(0x000000, 0);
-    sceneRef.appendChild(renderer.domElement);
+    renderer!.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer!.setSize(window.innerWidth, window.innerHeight);
+    renderer!.setClearColor(0x000000, 0);
+    sceneRef!.appendChild(renderer!.domElement);
 
     // 创建动态背景
-    dynamicBackground = new DynamicBackground(scene);
+    dynamicBackground = new DynamicBackground(scene!);
 
     // 添加三点光照系统
     // 1. 环境光 (Ambient Light) - 基础照明，增强至白色表面可见
     const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
-    scene.add(ambientLight);
+    scene!.add(ambientLight);
 
     // 2. 主光 (Key Light) - 定义明暗
     const mainLight = new THREE.DirectionalLight(0xffffff, 1.2);
     mainLight.position.set(5, 5, 10);
-    scene.add(mainLight);
+    scene!.add(mainLight);
 
     // 3. 补光 (Fill Light) - 柔化阴影
     const fillLight = new THREE.PointLight(0xccccff, 0.6);
     fillLight.position.set(-5, 0, 5);
-    scene.add(fillLight);
+    scene!.add(fillLight);
 
     // 4. 轮廓光 (Rim Light) - 勾勒边缘
     const rimLight = new THREE.SpotLight(0xffffff, 0.8);
     rimLight.position.set(0, 5, -2);
     rimLight.lookAt(0, 0, 0);
-    scene.add(rimLight);
+    scene!.add(rimLight);
 
     // 创建全息板父容器 - 所有 SVG 对象都将添加到这个 Group
     // 这样可以实现整体旋转效果，而不是每个对象单独旋转
     hologramGroup = new THREE.Group();
-    scene.add(hologramGroup);
+    scene!.add(hologramGroup!);
 
     // 初始化 SVG 对象
     initSVGObjects();
@@ -145,13 +146,15 @@ export function SVGScene() {
 
         const shapeData = SVGRegistry.getShapeData(id);
 
-        console.log(`[SVGScene] Creating SVGObject ${id}:`, {
-          hasShapeData: shapeData && shapeData.length > 0,
-          shapeDataLength: shapeData ? shapeData.length : 0,
-          baseScale,
-          originalSize,
-          position
-        });
+        if (import.meta.env.DEV) {
+          console.log(`[SVGScene] Creating SVGObject ${id}:`, {
+            hasShapeData: shapeData && shapeData.length > 0,
+            shapeDataLength: shapeData ? shapeData.length : 0,
+            baseScale,
+            originalSize,
+            position
+          });
+        }
 
         const svgObj = new SVGObject({
           id,
@@ -163,10 +166,12 @@ export function SVGScene() {
         });
 
         svgObjects.set(id, svgObj);
-        hologramGroup.add(svgObj.mesh);
-        scene.add(svgObj.hitPlane);  // hitPlane 仍需添加到 scene，因为它需要独立进行射线检测
+        hologramGroup!.add(svgObj.mesh);
+        scene!.add(svgObj.hitPlane);  // hitPlane 仍需添加到 scene，因为它需要独立进行射线检测
 
-        console.log(`[SVGScene] ${id}: pos=(${x.toFixed(2)}, ${y.toFixed(2)}) baseScale=${baseScale.toFixed(2)}`);
+        if (import.meta.env.DEV) {
+          console.log(`[SVGScene] ${id}: pos=(${x.toFixed(2)}, ${y.toFixed(2)}) baseScale=${baseScale.toFixed(2)}`);
+        }
 
         // 收集初始位置用于 store 更新（使用 Three.js mesh 的实际位置）
         initialPositions[id] = {
@@ -193,22 +198,25 @@ export function SVGScene() {
       objectActions.setInitialRotations(initialRotations);
       objectActions.setInitialScales(initialScales);
 
-      console.log(`[SVGScene] Initial positions set:`, initialPositions);
-      console.log(`[SVGScene] Expected positions from config:`, Object.fromEntries(
-        SVG_OBJECT_IDS.map(id => [id, SVG_POSITION_CONFIG[id]])
-      ));
-
-      console.log(`[SVGScene] Initialized ${svgObjects.size} SVG objects with custom sizes`);
+      if (import.meta.env.DEV) {
+        console.log(`[SVGScene] Initial positions set:`, initialPositions);
+        console.log(`[SVGScene] Expected positions from config:`, Object.fromEntries(
+          SVG_OBJECT_IDS.map(id => [id, SVG_POSITION_CONFIG[id]])
+        ));
+        console.log(`[SVGScene] Initialized ${svgObjects.size} SVG objects with custom sizes`);
+      }
 
       // 创建全息板边缘框
       createHologramEdges();
     } catch (error) {
       console.error('[SVGScene] Error initializing SVG objects:', error);
-      console.error('[SVGScene] Error details:', {
-        message: (error as Error).message,
-        stack: (error as Error).stack,
-        name: (error as Error).name
-      });
+      if (import.meta.env.DEV) {
+        console.error('[SVGScene] Error details:', {
+          message: (error as Error).message,
+          stack: (error as Error).stack,
+          name: (error as Error).name
+        });
+      }
     }
   }
 
@@ -220,7 +228,7 @@ export function SVGScene() {
     if (!hologramGroup) return;
 
     // 计算所有元素的整体边界
-    const overallBox = new (window.THREE as any).Box3();
+    const overallBox = new THREE.Box3();
     svgObjects.forEach((obj) => {
       const bounds = obj.getBounds();
       overallBox.union(bounds);
@@ -238,8 +246,8 @@ export function SVGScene() {
     overallBox.max.z = thickness / 2;
 
     // 创建边缘几何体 - 使用 LineSegments 显示边框
-    const edgesGeometry = new (window.THREE as any).EdgesGeometry(
-      new (window.THREE as any).BoxGeometry(
+    const edgesGeometry = new THREE.EdgesGeometry(
+      new THREE.BoxGeometry(
         overallBox.max.x - overallBox.min.x,
         overallBox.max.y - overallBox.min.y,
         thickness
@@ -251,65 +259,70 @@ export function SVGScene() {
     const centerY = (overallBox.min.y + overallBox.max.y) / 2;
 
     // 创建边缘材质 - 半透明发光效果
-    const edgesMaterial = new (window.THREE as any).LineBasicMaterial({
+    const edgesMaterial = new THREE.LineBasicMaterial({
       color: HOLOGRAM_CONFIG.EDGE_COLOR,
       transparent: true,
       opacity: HOLOGRAM_CONFIG.EDGE_OPACITY,
     });
 
-    hologramEdges = new (window.THREE as any).LineSegments(edgesGeometry, edgesMaterial);
-    hologramEdges.position.set(centerX, centerY, 0);
+    const edges = new THREE.LineSegments(edgesGeometry, edgesMaterial);
+    edges.position.set(centerX, centerY, 0);
+    hologramEdges = edges;
 
     // 添加到全息板容器
-    hologramGroup.add(hologramEdges);
+    hologramGroup.add(edges);
 
     // 创建侧面 - 显示厚度
     createHologramSides(overallBox, thickness);
 
-    console.log('[SVGScene] Hologram edges created with bounds:', overallBox);
+    if (import.meta.env.DEV) {
+      console.log('[SVGScene] Hologram edges created with bounds:', overallBox);
+    }
   }
 
   /**
    * 创建全息板侧面 - 显示厚度视觉效果
    */
-  function createHologramSides(bounds: any, thickness: number) {
+  function createHologramSides(bounds: THREE_TYPE.Box3, thickness: number) {
+    if (!hologramGroup) return;
+
     const width = bounds.max.x - bounds.min.x;
     const height = bounds.max.y - bounds.min.y;
     const centerX = (bounds.min.x + bounds.max.x) / 2;
     const centerY = (bounds.min.y + bounds.max.y) / 2;
 
     // 创建侧面材质 - 半透明深色
-    const sideMaterial = new (window.THREE as any).MeshBasicMaterial({
+    const sideMaterial = new THREE.MeshBasicMaterial({
       color: HOLOGRAM_CONFIG.SIDE_COLOR,
       transparent: true,
       opacity: HOLOGRAM_CONFIG.SIDE_OPACITY,
-      side: (window.THREE as any).DoubleSide,
+      side: THREE.DoubleSide,
     });
 
     // 创建四个侧面（左、右、上、下）
     const sideThickness = HOLOGRAM_CONFIG.SIDE_THICKNESS;
 
     // 左侧框
-    const leftGeo = new (window.THREE as any).BoxGeometry(sideThickness, height, thickness);
-    const leftSide = new (window.THREE as any).Mesh(leftGeo, sideMaterial);
+    const leftGeo = new THREE.BoxGeometry(sideThickness, height, thickness);
+    const leftSide = new THREE.Mesh(leftGeo, sideMaterial);
     leftSide.position.set(bounds.min.x, centerY, 0);
     hologramGroup.add(leftSide);
 
     // 右侧框
-    const rightGeo = new (window.THREE as any).BoxGeometry(sideThickness, height, thickness);
-    const rightSide = new (window.THREE as any).Mesh(rightGeo, sideMaterial);
+    const rightGeo = new THREE.BoxGeometry(sideThickness, height, thickness);
+    const rightSide = new THREE.Mesh(rightGeo, sideMaterial);
     rightSide.position.set(bounds.max.x, centerY, 0);
     hologramGroup.add(rightSide);
 
     // 上侧框
-    const topGeo = new (window.THREE as any).BoxGeometry(width + sideThickness * 2, sideThickness, thickness);
-    const topSide = new (window.THREE as any).Mesh(topGeo, sideMaterial);
+    const topGeo = new THREE.BoxGeometry(width + sideThickness * 2, sideThickness, thickness);
+    const topSide = new THREE.Mesh(topGeo, sideMaterial);
     topSide.position.set(centerX, bounds.max.y, 0);
     hologramGroup.add(topSide);
 
     // 下侧框
-    const bottomGeo = new (window.THREE as any).BoxGeometry(width + sideThickness * 2, sideThickness, thickness);
-    const bottomSide = new (window.THREE as any).Mesh(bottomGeo, sideMaterial);
+    const bottomGeo = new THREE.BoxGeometry(width + sideThickness * 2, sideThickness, thickness);
+    const bottomSide = new THREE.Mesh(bottomGeo, sideMaterial);
     bottomSide.position.set(centerX, bounds.min.y, 0);
     hologramGroup.add(bottomSide);
   }
@@ -399,7 +412,7 @@ export function SVGScene() {
         });
       });
 
-      renderer.render(scene, camera);
+      renderer!.render(scene!, camera!);
     };
 
     render();
@@ -470,13 +483,13 @@ export function SVGScene() {
           getHologramGroup,
           setSelectedWithScene: (id: string, selected: boolean) => {
             const obj = svgObjects.get(id);
-            if (obj) {
+            if (obj && scene) {
               obj.setSelected(selected, scene);
             }
           },
         };
       } else {
-        console.error('[SVGScene] THREE.js not loaded');
+        console.error('[SVGScene] THREE.js not loaded. Please check your network connection.');
       }
     }, 100);
   });

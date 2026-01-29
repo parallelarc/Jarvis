@@ -78,9 +78,7 @@ export class SVGRegistry {
   private static async parseSVGPaths(svgText: string): Promise<SVGShapeData[]> {
     // 使用 importmap 导入 SVGLoader
     try {
-      console.log('[SVGRegistry] Attempting to import SVGLoader...');
       const module = await import('three/addons/loaders/SVGLoader.js');
-      console.log('[SVGRegistry] SVGLoader module loaded:', Object.keys(module));
       const SVGLoader = (module as any).SVGLoader || (module as any).default;
 
       if (!SVGLoader) {
@@ -88,28 +86,17 @@ export class SVGRegistry {
         return [];
       }
 
-      console.log('[SVGRegistry] Creating SVGLoader instance...');
       const loader = new SVGLoader();
       const data = loader.parse(svgText);
 
-      console.log('[SVGRegistry] SVG parsed:', {
-        pathCount: data.paths.length,
-        paths: data.paths.map((p: any) => ({ subPaths: p.subPaths?.length, color: p.color }))
-      });
-
       const shapeDataList: SVGShapeData[] = [];
-      data.paths.forEach((path: any, pathIndex: number) => {
+      data.paths.forEach((path: any) => {
         // 对于evenodd填充规则的SVG，让SVGLoader自动检测方向
         const pathShapes = path.toShapes();
         const color = path.color;
         const opacity = path.userData?.style?.fillOpacity ?? 1.0;
 
-        console.log(`[SVGRegistry] Path ${pathIndex}: extracted ${pathShapes.length} shapes`);
-
-        pathShapes.forEach((shape: any, shapeIndex: number) => {
-          console.log(`[SVGRegistry] Path ${pathIndex} Shape ${shapeIndex}:`, {
-            holes: shape.holes ? shape.holes.length : 0
-          });
+        pathShapes.forEach((shape: any) => {
           shapeDataList.push({
             shape: shape,
             color: color,
@@ -118,11 +105,12 @@ export class SVGRegistry {
         });
       });
 
-      console.log(`[SVGRegistry] Total shapes extracted: ${shapeDataList.length}`);
       return shapeDataList;
     } catch (error) {
       console.error('[SVGRegistry] Error parsing SVG paths:', error);
-      console.error('[SVGRegistry] Error stack:', (error as Error).stack);
+      if (import.meta.env.DEV) {
+        console.error('[SVGRegistry] Error stack:', (error as Error).stack);
+      }
       return [];
     }
   }
@@ -177,7 +165,7 @@ export class SVGRegistry {
         img.src = dataUrl;
       });
     } catch (error) {
-      console.error(`[SVGRegistry] Error loading ${asset.id}:`, error);
+      console.error(`[SVGRegistry] Error loading ${asset.path}:`, error);
       throw error;
     }
   }

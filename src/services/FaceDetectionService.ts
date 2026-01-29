@@ -6,6 +6,7 @@
 
 import { faceStore, faceActions } from '@/stores/faceStore';
 import { objectActions } from '@/stores/objectStore';
+import { handStore } from '@/stores/handStore';
 import { FACE_PARALLAX_CONFIG, CAMERA_CONFIG } from '@/config';
 import { lerp } from '@/utils/math';
 
@@ -28,10 +29,37 @@ export function isFaceInCenter(): boolean {
 }
 
 /**
+ * 等待 FaceDetection 脚本加载完成
+ */
+function waitForFaceDetection(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (typeof window.FaceDetection !== 'undefined') {
+      resolve();
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      reject(new Error('FaceDetection script failed to load after 10 seconds'));
+    }, 10000);
+
+    const checkInterval = setInterval(() => {
+      if (typeof window.FaceDetection !== 'undefined') {
+        clearTimeout(timeout);
+        clearInterval(checkInterval);
+        resolve();
+      }
+    }, 100);
+  });
+}
+
+/**
  * 初始化 FaceDetection
  */
 export async function initFaceDetection(): Promise<void> {
   if (faceDetection) return;
+
+  // 等待脚本加载完成
+  await waitForFaceDetection();
 
   faceDetection = new window.FaceDetection({
     locateFile: (file: string) => {
@@ -45,7 +73,9 @@ export async function initFaceDetection(): Promise<void> {
   });
 
   await faceDetection.initialize();
-  console.log('[FaceDetection] 初始化完成');
+  if (import.meta.env.DEV) {
+    console.log('[FaceDetection] Initialized');
+  }
 }
 
 // 人脸检测 FPS 计数
@@ -88,8 +118,16 @@ export function onFaceResults(results: any): void {
     // 更新 store
     faceActions.setFacePosition(centerX, centerY);
 
-    // 始终应用3D视差效果（不再受 rotationMode 限制）
-    applyParallaxToObjects({ x: 0, y: 0 });
+    // 手势操作期间暂停视差效果，避免冲突导致对象乱摆
+    const isInteracting = handStore.left.isDragging ||
+                          handStore.right.isDragging ||
+                          handStore.left.isRotating ||
+                          handStore.zoomMode.active;
+
+    if (!isInteracting) {
+      // 应用3D视差效果（仅在没有手势操作时）
+      applyParallaxToObjects({ x: centerX, y: centerY });
+    }
 
   } else {
     // 未检测到人脸，检查是否超时复位

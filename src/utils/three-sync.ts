@@ -4,26 +4,17 @@
  */
 
 import type { Vector3D } from '@/core/types';
+import type { SVGObject } from '@/plugins/svg/SVGObject';
 import { THREE } from './three';
 
 /**
  * SVG 场景 API 接口
  */
 interface SVGSceneAPI {
-  getScene(): any;
-  getCamera(): any;
+  getScene(): import('three').Scene | null;
+  getCamera(): import('three').PerspectiveCamera | null;
   getSVGObjects(): Map<string, SVGObject> | undefined;
   setSelectedWithScene?(id: string, selected: boolean): void;  // 新增 Affinity 风格选中 API
-}
-
-/**
- * SVG 对象接口
- */
-interface SVGObject {
-  updatePosition(position: Vector3D): void;
-  setScale(scale: number): void;
-  setSelected(selected: boolean): void;
-  setRotation(rotation: Vector3D): void;  // 旋转方法
 }
 
 /**
@@ -43,10 +34,12 @@ export function syncSVGObjectPosition(id: string, position: Vector3D): boolean {
   const svgObjects = sceneAPI.getSVGObjects();
   if (!svgObjects) return false;
 
-  const svgObj = svgObjects.get(id) as SVGObject | undefined;
+  const svgObj = svgObjects.get(id);
   if (!svgObj) return false;
 
-  svgObj.updatePosition(position);
+  // 转换 Vector3D 为 Three.js Vector3
+  const pos = new THREE.Vector3(position.x, position.y, position.z ?? 0);
+  svgObj.updatePosition(pos);
   return true;
 }
 
@@ -101,7 +94,7 @@ export function syncAllSVGObjectsSelected(selected: boolean): void {
   const svgObjects = sceneAPI.getSVGObjects();
   if (!svgObjects) return;
 
-  svgObjects.forEach((obj: any) => obj.setSelected(selected));
+  svgObjects.forEach((obj) => obj.setSelected(selected));
 }
 
 /**
@@ -131,7 +124,7 @@ export function findObjectUnderPoint(point: { x: number; y: number }, preferredI
 
   // 如果指定了 preferredId，优先检查该对象
   if (preferredId) {
-    const preferredObj = svgObjects.get(preferredId) as any;
+    const preferredObj = svgObjects.get(preferredId);
     if (preferredObj && preferredObj.containsPoint(point3D)) {
       return preferredId;
     }
@@ -142,7 +135,7 @@ export function findObjectUnderPoint(point: { x: number; y: number }, preferredI
     // 跳过已检查的 preferredId
     if (preferredId && id === preferredId) continue;
 
-    if ((svgObj as any).containsPoint(point3D)) {
+    if (svgObj.containsPoint(point3D)) {
       return id;
     }
   }
@@ -160,9 +153,13 @@ export function syncSVGObjectRotation(id: string, rotation: Vector3D): boolean {
   const svgObjects = sceneAPI.getSVGObjects();
   if (!svgObjects) return false;
 
-  const svgObj = svgObjects.get(id) as SVGObject | undefined;
+  const svgObj = svgObjects.get(id);
   if (!svgObj) return false;
 
-  svgObj.setRotation(rotation);
+  svgObj.setRotation({
+    x: rotation.x,
+    y: rotation.y,
+    z: rotation.z ?? 0,
+  });
   return true;
 }

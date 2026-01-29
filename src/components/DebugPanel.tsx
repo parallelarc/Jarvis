@@ -2,7 +2,7 @@
  * 调试面板 - 完全重写的简单版本
  */
 
-import { createSignal, createMemo, Show, For } from 'solid-js';
+import { createSignal, createMemo, Show, For, onMount, onCleanup } from 'solid-js';
 import { handStore } from '@/stores/handStore';
 import { faceStore, faceActions } from '@/stores/faceStore';
 import { objectStore, objectActions } from '@/stores/objectStore';
@@ -108,6 +108,14 @@ export function DebugPanel() {
     }
   }
 
+  // 挂载时设置键盘监听，卸载时清理
+  onMount(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    onCleanup(() => {
+      window.removeEventListener('keydown', handleKeyDown);
+    });
+  });
+
   // 切换 BBox 显示
   function toggleBBox() {
     const newState = !debugBBox();
@@ -124,9 +132,6 @@ export function DebugPanel() {
       }
     }
   }
-
-  // 挂载时设置
-  window.addEventListener('keydown', handleKeyDown);
 
   return (
     <>

@@ -146,8 +146,12 @@ export function processRotationInteraction(
   if (pinchStart) {
     // 只有当有对象被选中时才开始旋转
     if (currentSelectedId) {
-      // 计算手掌中心（使用手掌中心点 index 9）
-      const palmCenter = landmarks[9];
+      // 计算手掌中心（手腕和中指根部的中点）
+      const palmCenter = {
+        x: (landmarks[0].x + landmarks[9].x) / 2,
+        y: (landmarks[0].y + landmarks[9].y) / 2,
+        z: (landmarks[0].z + landmarks[9].z) / 2,
+      };
       startRotating(currentSelectedId, palmCenter, callbacks);
     }
     return;
@@ -163,8 +167,12 @@ export function processRotationInteraction(
 
   // === 捏合中：处理旋转 ===
   if (isPinching && handState.isRotating && currentSelectedId) {
-    // 计算手掌中心
-    const palmCenter = landmarks[9];
+    // 计算手掌中心（手腕和中指根部的中点）
+    const palmCenter = {
+      x: (landmarks[0].x + landmarks[9].x) / 2,
+      y: (landmarks[0].y + landmarks[9].y) / 2,
+      z: (landmarks[0].z + landmarks[9].z) / 2,
+    };
     updateObjectRotation(currentSelectedId, palmCenter);
   }
 }

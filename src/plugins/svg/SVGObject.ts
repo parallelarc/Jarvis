@@ -50,7 +50,7 @@ export class SVGObject {
       try {
         this.computeContentBounds();
       } catch (error) {
-        console.error(`[SVGObject] Error computing bounds for ${this.id}:`, error);
+        console.warn(`[SVGObject] Error computing bounds for ${this.id}:`, error);
       }
     }
 
@@ -70,10 +70,8 @@ export class SVGObject {
         this.build3DGeometry();
       } catch (error) {
         console.error(`[SVGObject] Error building 3D geometry for ${this.id}:`, error);
-        console.error(`[SVGObject] Error stack:`, (error as Error).stack);
       }
-    } else {
-        // Fallback or empty?
+    } else if (import.meta.env.DEV) {
         console.warn(`[SVGObject] No shape data for ${this.id}`);
     }
 
@@ -96,9 +94,10 @@ export class SVGObject {
    * 构建 3D 几何体
    */
   private build3DGeometry() {
-    // Extrude Settings - 增加深度让元素更厚
+    // Extrude Settings - 深度值影响3D立体感和最终视觉厚度
+    // 深度值越大，元素看起来越厚
     const extrudeSettings = {
-      depth: 1000, // 深度，影响元素厚度
+      depth: 1000, // 增加深度值以确保明显的3D效果
       bevelEnabled: false  // 禁用倒角，避免多边形爆炸
     };
 
@@ -264,11 +263,6 @@ export class SVGObject {
 
     this.mesh.rotation.set(rotation.x, rotation.y, rotation.z);
     this.hitPlane.rotation.set(rotation.x, rotation.y, rotation.z);
-
-    // DEBUG: 输出旋转值
-    if (this.id === 'v' && Math.abs(rotation.y) > 0.05) {
-      console.log('[SVGObject]', this.id, 'mesh.rotation:', this.mesh.rotation);
-    }
 
     this.syncBoundingBoxVisuals();
   }

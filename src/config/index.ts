@@ -172,8 +172,10 @@ export const SVG_POSITION_CONFIG: Record<string, { x: number; y: number }> = Obj
   ])
 );
 
-// 调试日志：输出计算出的位置
-console.log('[CONFIG] SVG_POSITION_CONFIG calculated:', SVG_POSITION_CONFIG);
+// 只在开发环境输出配置信息
+if (import.meta.env.DEV) {
+  console.log('[CONFIG] SVG_POSITION_CONFIG calculated:', SVG_POSITION_CONFIG);
+}
 
 // ============================================================================
 // 动态背景配置
