@@ -18,7 +18,7 @@ npm run type-check       # TypeScript type checking
 ## Tech Stack
 
 - **SolidJS** 1.8.11 - Reactive UI (NOT React, fine-grained reactivity)
-- **Three.js** 0.160.0 - 3D rendering (via CDN on `window.THREE`)
+- **Three.js** 0.182.0 - 3D rendering (via Vite import)
 - **MediaPipe Hands** - Hand tracking (local models in `/public/models/hands/`)
 - **Vite** 5.0.12 - Build tool
 - **TypeScript** 5.3.3
