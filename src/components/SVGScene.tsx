@@ -75,6 +75,10 @@ export function SVGScene() {
 
     // 创建动态背景
     dynamicBackground = new DynamicBackground(scene!);
+    
+    // 绑定相机用于背景跟随
+    // 这样背景会跟随相机移动而反向移动，保持视觉上静止
+    dynamicBackground.attachToCamera(camera!);
 
     // 添加三点光照系统
     // 1. 环境光 (Ambient Light) - 基础照明，增强至白色表面可见

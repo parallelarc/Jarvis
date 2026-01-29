@@ -8,7 +8,7 @@ import { objectStore, objectActions } from '@/stores/objectStore';
 import { ROTATION_CONFIG } from '@/config';
 import { normalizedToWorld, calculateDistance } from '@/utils/math';
 import { calculateDynamicPinchThreshold, calculatePalmSize } from '@/domain/GestureDetector';
-import { isFaceInCenter } from './FaceDetectionService';
+
 
 export interface RotationInteractionCallbacks {
   setWasPinching: (side: 'Left' | 'Right', wasPinching: boolean) => void;
@@ -116,8 +116,7 @@ export function processRotationInteraction(
   // 仅处理左手旋转
   if (side !== 'Left') return;
 
-  // 只有在面部正前方时才启用手势旋转
-  if (!isFaceInCenter()) return;
+  // 手势旋转独立，不再依赖面部位置检测
 
   const thumbTip = landmarks[4];
   const indexTip = landmarks[8];

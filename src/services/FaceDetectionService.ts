@@ -5,7 +5,6 @@
  */
 
 import { faceStore, faceActions } from '@/stores/faceStore';
-import { objectActions } from '@/stores/objectStore';
 import { handStore } from '@/stores/handStore';
 import { FACE_PARALLAX_CONFIG, CAMERA_CONFIG } from '@/config';
 import { lerp } from '@/utils/math';
@@ -19,14 +18,7 @@ declare global {
 
 let faceDetection: any = null;
 
-/**
- * 检查面部是否在正前方（用于控制手势交互）
- */
-export function isFaceInCenter(): boolean {
-  if (!faceStore.detected) return false;
-  const distanceFromCenter = Math.abs(faceStore.x - FACE_PARALLAX_CONFIG.CENTER_OFFSET);
-  return distanceFromCenter < FACE_PARALLAX_CONFIG.CENTER_THRESHOLD;
-}
+
 
 /**
  * 等待 FaceDetection 脚本加载完成
@@ -69,7 +61,7 @@ export async function initFaceDetection(): Promise<void> {
 
   faceDetection.setOptions({
     model: 'short',           // 'short' 更快，适合近距离
-    minDetectionConfidence: 0.5,
+    minDetectionConfidence: 0.3,  // 降低阈值以支持3-4米远距离检测（原0.5）
   });
 
   await faceDetection.initialize();
@@ -118,14 +110,11 @@ export function onFaceResults(results: any): void {
     // 更新 store
     faceActions.setFacePosition(centerX, centerY);
 
-    // 手势操作期间暂停视差效果，避免冲突导致对象乱摆
-    const isInteracting = handStore.left.isDragging ||
-                          handStore.right.isDragging ||
-                          handStore.left.isRotating ||
-                          handStore.zoomMode.active;
-
-    if (!isInteracting) {
-      // 应用3D视差效果（仅在没有手势操作时）
+    // 简化：只要有手部动作就禁用视差，避免任何干扰
+    const hasHandAction = handStore.left.active || handStore.right.active;
+    
+    if (!hasHandAction) {
+      // 无手部动作时才应用视差
       applyParallaxToObjects({ x: centerX, y: centerY });
     }
 
@@ -159,7 +148,7 @@ function applyParallaxToObjects(faceRotation: { x: number; y: number }) {
 
   // 视差强度 - 控制相机移动范围
   const targetOffsetX = -faceX * FACE_PARALLAX_CONFIG.PARALLAX_STRENGTH;  // 人往右，相机往左，看到右侧
-  const targetOffsetY = faceY * FACE_PARALLAX_CONFIG.PARALLAX_STRENGTH * FACE_PARALLAX_CONFIG.Y_AXIS_MULTIPLIER;
+  const targetOffsetY = -faceY * FACE_PARALLAX_CONFIG.PARALLAX_STRENGTH * FACE_PARALLAX_CONFIG.Y_AXIS_MULTIPLIER;  // 人往上，相机往下，看到上侧
 
   // 平滑插值
   const smoothedOffset = {
@@ -183,7 +172,8 @@ function applyParallaxToObjects(faceRotation: { x: number; y: number }) {
 }
 
 /**
- * 复位视差效果
+ * 复位视差效果（平滑过渡到中心）
+ * 注意：只复位相机位置，不复位对象的 rotation（避免与手部旋转冲突）
  */
 function resetParallax() {
   const sceneAPI = (window as any).svgSceneAPI;
@@ -192,24 +182,30 @@ function resetParallax() {
   const camera = sceneAPI.getCamera();
   if (!camera) return;
 
-  // 复位相机位置到中心
-  camera.position.set(0, 0, CAMERA_CONFIG.CAMERA_Z);
+  // 平滑复位：使用与 applyParallaxToObjects 相同的 lerp 逻辑，目标为0
+  const smoothedOffset = {
+    x: lerp(cameraOffsetCache.x, 0, FACE_PARALLAX_CONFIG.SMOOTHING_FACTOR),
+    y: lerp(cameraOffsetCache.y, 0, FACE_PARALLAX_CONFIG.SMOOTHING_FACTOR)
+  };
+
+  // 更新缓存
+  cameraOffsetCache.x = smoothedOffset.x;
+  cameraOffsetCache.y = smoothedOffset.y;
+
+  // 移动相机位置（保持 Z 轴距离不变）
+  camera.position.x = smoothedOffset.x;
+  camera.position.y = smoothedOffset.y;
   camera.lookAt(0, 0, 0);
 
-  // 复位偏移缓存
-  cameraOffsetCache.x = 0;
-  cameraOffsetCache.y = 0;
-
-  // 复位每个对象的 rotation store
-  const svgObjects = sceneAPI.getSVGObjects();
-  if (svgObjects) {
-    svgObjects.forEach((obj: any) => {
-      if (obj.hitPlane) {
-        obj.hitPlane.rotation.set(0, 0, 0);
-      }
-      objectActions.updateObjectRotation(obj.id, { x: 0, y: 0, z: 0 });
-    });
+  // 当接近中心时，精确复位相机
+  if (Math.abs(smoothedOffset.x) < 0.01 && Math.abs(smoothedOffset.y) < 0.01) {
+    cameraOffsetCache.x = 0;
+    cameraOffsetCache.y = 0;
+    camera.position.set(0, 0, CAMERA_CONFIG.CAMERA_Z);
   }
+  
+  // 重要：不复位对象的 rotation，因为手部旋转交互会使用这个
+  // 面部视差和手部旋转是两个独立的变换，不应该互相覆盖
 }
 
 /**

@@ -77,19 +77,30 @@ export const DESIGN_CONFIG = {
 // 手势检测内部配置
 // ============================================================================
 
+// 远距离场景 (3-4米) 配置
+const IS_LONG_DISTANCE_GESTURE = true;
+
 export const GESTURE_DETECTION_CONFIG = {
-  FINGER_EXTENDED_RATIO: 1.2,
-  OK_THRESHOLD: 0.06,
-  WAVE_SPEED_THRESHOLD: 0.03,
+  // 手指伸直判定比例 - 远距离时手部较小，降低比例使检测更灵敏
+  FINGER_EXTENDED_RATIO: IS_LONG_DISTANCE_GESTURE ? 1.15 : 1.2,
+  
+  // OK手势阈值 - 远距离时指尖距离变小，降低阈值
+  OK_THRESHOLD: IS_LONG_DISTANCE_GESTURE ? 0.04 : 0.06,
+  
+  // 挥手检测阈值 - 远距离时手移动幅度在画面中较小
+  WAVE_SPEED_THRESHOLD: IS_LONG_DISTANCE_GESTURE ? 0.02 : 0.03,
   WAVE_COUNT_THRESHOLD: 3,
   WAVE_TIME_WINDOW: 1000,
   HELLO_WAVE_THRESHOLD: 3,
   HELLO_WAVE_TIME_WINDOW: 1500,
+  
   POINTING_NO_CURL_THRESHOLD: 0.3,
   VICTORY_EXTENDED_ANGLE: 160,
   THUMB_UP_ANGLE_THRESHOLD: 160,
   PALM_DIRECTION_THRESHOLD: 0.5,
-  FIST_CURLED_THRESHOLD: 0.6,
+  
+  // 握拳检测阈值 - 远距离时手指弯曲检测可能不准确，放宽阈值
+  FIST_CURLED_THRESHOLD: IS_LONG_DISTANCE_GESTURE ? 0.5 : 0.6,
 } as const;
 
 // ============================================================================
@@ -196,8 +207,8 @@ export const DYNAMIC_BACKGROUND_CONFIG = {
   LIGHT_DIRECTION: { x: -0.707, y: 0.707 },  // 归一化的左上方向向量
 
   // 几何配置
-  PLANE_Z: -1,  // 背景平面在 SVG 对象后面
-  PLANE_SIZE: 25,  // 覆盖整个视野
+  PLANE_Z: -1,  // 背景平面在 SVG 对象后面（更远以避免倾斜时露出边缘）
+  PLANE_SIZE: 80,  // 更大的平面尺寸确保覆盖整个视野
 } as const;
 
 // ============================================================================
@@ -264,32 +275,43 @@ export const MEDIAPIPE_CONFIG = {
   TARGET_FPS: 120,              // MediaPipe 目标帧率 (120Hz 显示器)
   FRAME_INTERVAL_MS: 1000 / 120, // ~8.3ms
   ENABLE_THROTTLING: true,       // 是否启用帧率节流
+  
+  // 远距离检测配置 (3-4米)
+  LONG_DISTANCE_MODE: true,      // 启用远距离模式
 } as const;
 
 // ============================================================================
 // 面部视差配置
 // ============================================================================
 
+// 远距离场景 (3-4米) 配置
+const IS_LONG_DISTANCE = true;
+
 export const FACE_PARALLAX_CONFIG = {
   // SVG 元素旋转角度范围（弧度）
-  MAX_ROTATION_Y: 0.52,     // 约 30°，人脸左/右移时的最大旋转角度（增大）
-  MAX_ROTATION_X: 0.2,      // 约 11.5°，人脸上/下移时的最大旋转角度（增大）
+  // 远距离时头部移动对视角影响较小，需要增大旋转角度来补偿
+  MAX_ROTATION_Y: IS_LONG_DISTANCE ? 0.7 : 0.52,     // 远距离约 40°，近距离约 30°
+  MAX_ROTATION_X: IS_LONG_DISTANCE ? 0.3 : 0.2,      // 远距离约 17°，近距离约 11.5°
 
   // 平滑插值参数
-  SMOOTHING_FACTOR: 0.08,   // LERP 系数（0.01-1.0），越小越平滑
+  // 远距离时检测可能不稳定，需要更强的平滑处理
+  SMOOTHING_FACTOR: IS_LONG_DISTANCE ? 0.05 : 0.08,  // 远距离更小更平滑
 
   // 性能优化
-  DEADZONE_THRESHOLD: 0.02, // 死区阈值，过滤微小抖动
-  FACE_TIMEOUT_MS: 2000,    // 面部丢失超时（2秒后复位）
+  // 远距离时面部在画面中较小，微小抖动更明显，增大死区
+  DEADZONE_THRESHOLD: IS_LONG_DISTANCE ? 0.03 : 0.02, // 远距离更大死区
+  FACE_TIMEOUT_MS: 3000,    // 面部丢失超时（3秒后复位，远距离检测可能不稳定）
 
   // 视差参数
-  PARALLAX_STRENGTH: 3.0,   // 视差强度，控制相机移动范围
-  Y_AXIS_MULTIPLIER: 0.5,   // Y轴视差强度系数（上下移动幅度稍小）
+  // 远距离时相机移动范围需要更大才能产生明显视差效果
+  PARALLAX_STRENGTH: IS_LONG_DISTANCE ? 4.5 : 3.0,   // 远距离更大视差强度
+  Y_AXIS_MULTIPLIER: 1.2,   // Y轴视差强度系数（上下移动幅度更大）
   CENTER_OFFSET: 0.5,       // 归一化坐标中心点
 
   // 自动模式切换
   AUTO_SWITCH_ENABLED: true,        // 是否启用自动模式切换
-  CENTER_THRESHOLD: 0.15,           // 正前方检测阈值（±0.15 即 0.35-0.65 范围为正前方）
+  // 远距离时面部中心区域判定更宽松
+  CENTER_THRESHOLD: IS_LONG_DISTANCE ? 0.2 : 0.15,    // 远距离±0.2，近距离±0.15
   MODE_SWITCH_COOLDOWN: 500,        // 模式切换冷却时间（毫秒），避免频繁切换
 } as const;
 

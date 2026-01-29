@@ -57,7 +57,25 @@ export class DynamicBackground {
 
     this.mesh = new THREE.Mesh(geometry, this.material);
     this.mesh.position.z = DYNAMIC_BACKGROUND_CONFIG.PLANE_Z;
+    
+    // 确保背景最先渲染
+    this.mesh.renderOrder = -1000;
+    
     scene.add(this.mesh);
+  }
+
+  /**
+   * 将背景附加为相机的子对象，使其在视口中保持静止
+   * 解决视差效果导致背景跟随前景旋转的问题
+   */
+  /**
+   * 将背景绑定到相机，使其在视差效果中保持视觉上静止
+   * 通过在每帧更新背景位置，抵消相机移动的影响
+   */
+  attachToCamera(camera: any): void {
+    // 保存相机引用，在 update 中使用
+    (this.mesh as any).userData.camera = camera;
+    (this.mesh as any).userData.isBackground = true;
   }
 
   private getVertexShader(): string {
@@ -172,6 +190,14 @@ export class DynamicBackground {
     // 微动效果 - 非常缓慢的时间更新
     if (this.uniforms) {
       this.uniforms.uTime.value += deltaTime * DYNAMIC_BACKGROUND_CONFIG.TIME_SCALE;
+    }
+    
+    // 背景跟随相机移动以保持视觉上静止
+    if (this.mesh && (this.mesh as any).userData.camera) {
+      const camera = (this.mesh as any).userData.camera;
+      // 背景位置与相机位置相反，这样在透视变化中保持屏幕上位置不变
+      this.mesh.position.x = -camera.position.x;
+      this.mesh.position.y = -camera.position.y;
     }
   }
 

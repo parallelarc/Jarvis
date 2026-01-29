@@ -7,7 +7,7 @@
 import { onMount, onCleanup } from 'solid-js';
 import { handStore } from '@/stores/handStore';
 import { HAND_OVERLAY_CONFIG } from '@/config';
-import { isFaceInCenter } from '@/services/FaceDetectionService';
+
 
 export function HandOverlay() {
   let canvasRef: HTMLCanvasElement | undefined;
@@ -19,13 +19,6 @@ export function HandOverlay() {
    */
   function drawHands() {
     if (!canvasRef || !ctx) return;
-
-    // 只有在面部正前方时才显示手部指示点
-    if (!isFaceInCenter()) {
-      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
-      animationId = requestAnimationFrame(drawHands);
-      return;
-    }
 
     const width = window.innerWidth;
     const height = window.innerHeight;

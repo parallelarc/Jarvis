@@ -14,7 +14,7 @@ import {
   syncAllSVGObjectsSelected,
 } from '@/utils/three-sync';
 import { findObjectUnderFinger } from './TouchDetectionService';
-import { isFaceInCenter } from './FaceDetectionService';
+
 
 export interface DragInteractionCallbacks {
   setWasPinching: (side: 'Left' | 'Right', wasPinching: boolean) => void;
@@ -70,8 +70,7 @@ export function processDragInteraction(
   callbacks: DragInteractionCallbacks,
   skipPinchStateUpdate: boolean = false
 ) {
-  // 只有在面部正前方时才启用手势交互
-  if (!isFaceInCenter()) return;
+  // 手势交互独立，不再依赖面部位置检测
 
   const thumbTip = landmarks[4];
   const indexTip = landmarks[8];

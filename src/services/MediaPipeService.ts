@@ -211,8 +211,8 @@ export function createMediaPipeService(callbacks: MediaPipeCallbacks): MediaPipe
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 640 },   // 降低分辨率以提升性能：640x480 (原1920x1080)
-          height: { ideal: 480 },  // 页面显示分辨率通过CSS保持不变
+          width: { ideal: 1280 },  // 提高分辨率以支持3-4米远距离检测（原640）
+          height: { ideal: 720 },  // 页面显示分辨率通过CSS保持不变
           facingMode: 'user',
         },
       });
