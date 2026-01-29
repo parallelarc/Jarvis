@@ -8,7 +8,7 @@ import { objectStore, objectActions } from '@/stores/objectStore';
 import { animationActions } from '@/stores/animationStore';
 import { AUTO_RESET_CONFIG } from '@/config';
 import { animationManager } from '@/managers/AnimationManager';
-import { syncSVGObjectPosition, syncSVGObjectScale } from '@/utils/three-sync';
+import { syncSVGObjectPosition, syncSVGObjectScale, syncSVGObjectRotation } from '@/utils/three-sync';
 import type { Vector3D } from '@/core/types';
 
 class AutoResetService {
@@ -66,7 +66,7 @@ class AutoResetService {
 
     const objectIds = Object.keys(objectStore.objects);
     const initialPositions = objectStore.initialPositions;
-
+    const initialRotations = objectStore.initialRotations;
     const initialScales = objectStore.initialScales;
 
     // 标记动画开始
@@ -77,13 +77,15 @@ class AutoResetService {
       if (!svgObj) return;
 
       const targetPos = initialPositions[id] || { x: 0, y: 0, z: 0 };
+      const targetRotation = initialRotations[id] || { x: 0, y: 0, z: 0 };
       const targetScale = initialScales[id] ?? 1.0;
 
       // 从 Three.js mesh 读取当前实际状态作为起点
       const currentMeshPos = svgObj.mesh.position;
       const startPos = { x: currentMeshPos.x, y: currentMeshPos.y, z: currentMeshPos.z };
 
-      // 从 store 读取当前缩放作为起点
+      // 从 store 读取当前旋转和缩放作为起点
+      const currentRotation = objectStore.objects[id]?.rotation || { x: 0, y: 0, z: 0 };
       const currentScale = objectStore.objects[id]?.scale ?? 1.0;
 
       // 创建位置补间动画
@@ -101,8 +103,20 @@ class AutoResetService {
         }
       );
 
-      // 注意：不复位 rotation，因为 rotation 主要由手部旋转控制
-      // 避免手部旋转后被自动复位覆盖
+      // 创建旋转补间动画（使用更长的时长，让旋转复位更平滑）
+      const rotTweenId = animationManager.createVectorTween(
+        `auto-reset-rot-${id}`,
+        AUTO_RESET_CONFIG.ANIMATION_DURATION_MS * 1.5,
+        AUTO_RESET_CONFIG.EASING_TYPE,
+        currentRotation,
+        targetRotation,
+        (currentRot) => {
+          // 更新 store
+          objectActions.updateObjectRotation(id, currentRot);
+          // 同步到 Three.js
+          syncSVGObjectRotation(id, currentRot);
+        }
+      );
 
       // 创建缩放补间动画
       const scaleTweenId = animationManager.createNumberTween(
@@ -119,7 +133,7 @@ class AutoResetService {
         }
       );
 
-      this.tweenIds.push(posTweenId, scaleTweenId);
+      this.tweenIds.push(posTweenId, rotTweenId, scaleTweenId);
     });
 
     // 动画完成回调（在所有动画完成后）

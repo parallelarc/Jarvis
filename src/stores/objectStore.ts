@@ -6,7 +6,7 @@
 import { createStore, produce } from 'solid-js/store';
 import type { Vector3D } from '@/core/types';
 import { INTERACTION_CONFIG, getSVGObjectInitialState } from '@/config';
-import { syncSVGObjectPosition, syncAllSVGObjectsSelected } from '@/utils/three-sync';
+import { syncSVGObjectPosition, syncSVGObjectRotation, syncSVGObjectScale, syncAllSVGObjectsSelected } from '@/utils/three-sync';
 
 export interface ObjectState {
   position: Vector3D;
@@ -110,24 +110,31 @@ export const objectActions = {
   },
 
   /**
-   * 重置所有对象到初始状态
+   * 重置所有对象到初始状态（位置、旋转、缩放）
    */
   resetAllObjects() {
     const resetState: Record<string, ObjectState> = {};
     const initialPositions = objectStore.initialPositions;
+    const initialRotations = objectStore.initialRotations;
+    const initialScales = objectStore.initialScales;
 
     Object.keys(initialObjects).forEach(id => {
-      // 使用保存的初始位置，如果没有则使用默认 (0, 0, 0)
+      // 使用保存的初始值，如果没有则使用默认值
       const initialPos = initialPositions[id] || { x: 0, y: 0, z: 0 };
+      const initialRot = initialRotations[id] || { x: 0, y: 0, z: 0 };
+      const initialScale = initialScales[id] ?? 1.0;
+
       resetState[id] = {
         position: { ...initialPos },
-        scale: 1.0,
-        rotation: { x: 0, y: 0, z: 0 },
+        scale: initialScale,
+        rotation: { ...initialRot },
         selected: false,
       };
 
       // 同步到 Three.js 场景
       syncSVGObjectPosition(id, initialPos);
+      syncSVGObjectRotation(id, initialRot);
+      syncSVGObjectScale(id, initialScale);
     });
 
     // 取消所有选中高亮
